@@ -335,7 +335,7 @@ public class ResourceTests
         await c.Numbers.GetFaxAsync("n");
         await c.Numbers.SetFaxAsync("n", new NumberFaxRequest { Email = "e" });
         await c.Numbers.RemoveFaxAsync("n");
-        await c.Numbers.SetForwardAsync("n", new NumberForwardRequest { Destination = 2015551234 });
+        await c.Numbers.SetForwardAsync("n", new NumberForwardRequest { Destination = "2015551234" });
         await c.Numbers.RemoveForwardAsync("n");
         await c.Numbers.GetSmsAsync("n");
         await c.Numbers.SetSmsAsync("n", new NumberSmsRequest { Type = "email", Resource = "e" });

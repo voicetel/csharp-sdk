@@ -183,7 +183,7 @@ public class ModelCoverageTests
         Roundtrip(new NumberCnamRequest { Enabled = true });
         Roundtrip(new NumberLidbRequest { Cnam = "x", CustomerOrderReference = "r" });
         Roundtrip(new NumberFaxRequest { Email = "e" });
-        Roundtrip(new NumberForwardRequest { Destination = 1 });
+        Roundtrip(new NumberForwardRequest { Destination = "2015551234" });
         Roundtrip(new NumberTranslationRequest { Translation = "1" });
         Roundtrip(new NumberSmsRequest { Type = "email", Resource = "r" });
         Roundtrip(new NumberMessagingPatchRequest { RouteIn = 1, RouteOut = 2 });
