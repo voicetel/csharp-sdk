@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <RootNamespace>VoiceTel.Sdk</RootNamespace>
+    <AssemblyName>VoiceTel.Sdk</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>VoiceTel.Sdk</PackageId>
+    <Version>2.2.10</Version>
+    <AssemblyVersion>2.2.10.0</AssemblyVersion>
+    <FileVersion>2.2.10.0</FileVersion>
+    <Authors>VoiceTel</Authors>
+    <Company>VoiceTel Communications</Company>
+    <Product>VoiceTel C# / .NET SDK</Product>
+    <Description>Official C# / .NET SDK for the VoiceTel REST API (v2.2.10). Provision numbers, place orders, validate e911, send messages, and manage your account.</Description>
+    <Copyright>Copyright (c) 2026 VoiceTel Communications</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://voicetel.com/docs/api/v2.2/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/voicetel/csharp-sdk</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>voicetel;sip;voip;sms;mms;telephony;cnam;lrn;e911;rest;api</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Condition="Exists('..\..\README.md')" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+</Project>
