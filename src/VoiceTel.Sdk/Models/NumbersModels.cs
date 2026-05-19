@@ -38,7 +38,7 @@ public sealed class NumberFaxRequest
 /// <summary>Body for <c>PUT /v2.2/numbers/{number}/forward</c>.</summary>
 public sealed class NumberForwardRequest
 {
-    [JsonPropertyName("destination")] public int Destination { get; set; }
+    [JsonPropertyName("destination")] public string Destination { get; set; } = string.Empty;
 }
 
 /// <summary>Body for <c>PUT /v2.2/numbers/{number}/translation</c>.</summary>
