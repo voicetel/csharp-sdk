@@ -44,7 +44,11 @@ internal sealed class Transport
         string userAgent,
         int maxRetries)
     {
-        _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        _httpClient = httpClient ?? new HttpClient(new HttpClientHandler
+        {
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+        })
+        { Timeout = TimeSpan.FromSeconds(30) };
         _ownsHttpClient = ownsHttpClient || httpClient is null;
         _baseUrl = (baseUrl ?? SdkInfo.DefaultBaseUrl).TrimEnd('/');
         _userAgent = userAgent;
@@ -158,6 +162,10 @@ internal sealed class Transport
             }
         }
 
+        string? idempotencyKey = (method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Patch)
+            ? Guid.NewGuid().ToString()
+            : null;
+
         Exception? lastError = null;
         for (var attempt = 0; attempt <= _maxRetries; attempt++)
         {
@@ -168,6 +176,10 @@ internal sealed class Transport
             if (requireAuth && !string.IsNullOrEmpty(_apiKey))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+            }
+            if (idempotencyKey is not null)
+            {
+                request.Headers.TryAddWithoutValidation("Idempotency-Key", idempotencyKey);
             }
             if (bodyBytes is not null)
             {
