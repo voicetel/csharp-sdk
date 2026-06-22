@@ -15,7 +15,7 @@ jobs:
         dotnet: ['8.0.x', '9.0.x']
     name: build / .NET ${{ matrix.dotnet }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup .NET ${{ matrix.dotnet }}
         uses: actions/setup-dotnet@v5
