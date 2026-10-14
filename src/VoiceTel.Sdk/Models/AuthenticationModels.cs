@@ -3,17 +3,20 @@ using System.Text.Json.Serialization;
 
 namespace VoiceTel.Sdk.Models;
 
-/// <summary>Authentication-mode constants for SIP/HTTP credentials.</summary>
+/// <summary>
+/// Authentication-mode constants for SIP/HTTP credentials:
+/// 0 = Digest, 1 = Lax (Digest | IP), 2 = IP, 3 = Strict (Digest + IP).
+/// </summary>
 public static class AuthTypes
 {
     /// <summary>SIP Digest auth.</summary>
     public const int Digest = 0;
-    /// <summary>IP-based auth (allowlist only).</summary>
-    public const int IpAuth = 1;
-    /// <summary>Digest OR IP allowlist.</summary>
-    public const int DigestOrIp = 2;
-    /// <summary>Digest AND IP allowlist (both required).</summary>
-    public const int DigestAndIp = 3;
+    /// <summary>Lax — Digest or IP allowlist.</summary>
+    public const int Lax = 1;
+    /// <summary>IP allowlist only.</summary>
+    public const int Ip = 2;
+    /// <summary>Strict — Digest and IP allowlist (both required).</summary>
+    public const int Strict = 3;
 }
 
 /// <summary>Body for <c>PUT /v2.2/auth</c>. <c>null</c> means "leave unchanged".</summary>

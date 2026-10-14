@@ -27,7 +27,11 @@ public sealed class MessagingBrandCreateRequest
     [JsonPropertyName("messagingBrandDescription")] public string? MessagingBrandDescription { get; set; }
 }
 
-/// <summary>Body for <c>POST /v2.2/messaging/campaigns</c>.</summary>
+/// <summary>
+/// Body for <c>POST /v2.2/messaging/campaigns</c>. Passed through to the campaign
+/// registration service; <see cref="CampaignClassName"/> (from the campaign registry)
+/// and <see cref="CampaignStartDate"/> (today) are auto-populated if omitted.
+/// </summary>
 public sealed class MessagingCampaignCreateRequest
 {
     [JsonPropertyName("messagingBrandId")] public string MessagingBrandId { get; set; } = string.Empty;
@@ -104,12 +108,53 @@ public sealed class MessagingCampaignCreateData
     [JsonPropertyName("result")] public CampaignRegistrationResult Result { get; set; } = new();
 }
 
-/// <summary>A single campaign and its currently-bound numbers.</summary>
+/// <summary>
+/// One carrier's latest DCA decision in <see cref="CampaignDca"/>.
+/// <see cref="Status"/> is ACTIVE, REJECTED, SUSPENDED, UNSUNSPENDED or TERMINATED;
+/// <see cref="Detail"/> is the reviewer's note, as given.
+/// </summary>
+public sealed class CampaignDcaCarrier
+{
+    [JsonPropertyName("carrier")] public string Carrier { get; set; } = string.Empty;
+    /// <summary>ACTIVE, REJECTED, SUSPENDED, UNSUNSPENDED or TERMINATED.</summary>
+    [JsonPropertyName("status")] public string Status { get; set; } = string.Empty;
+    /// <summary>The reviewer's note, as given.</summary>
+    [JsonPropertyName("detail")] public string Detail { get; set; } = string.Empty;
+    [JsonPropertyName("updatedAt")] public string UpdatedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Carrier (DCA) review progress for a campaign; <c>null</c> for CAMPAIGN_INVALID_ID.
+/// <see cref="ElectedCarriers"/> lists the carriers with a DCA assigned so far
+/// (null when unavailable); <see cref="Carriers"/> holds each carrier DCA decision
+/// received, latest per carrier.
+/// </summary>
+public sealed class CampaignDca
+{
+    /// <summary>True when every carrier has a DCA assigned to review the campaign.</summary>
+    [JsonPropertyName("electionComplete")] public bool ElectionComplete { get; set; }
+    /// <summary>Carriers with a DCA assigned so far; <c>null</c> when unavailable.</summary>
+    [JsonPropertyName("electedCarriers")] public List<string>? ElectedCarriers { get; set; }
+    /// <summary>Each carrier DCA decision received, latest per carrier.</summary>
+    [JsonPropertyName("carriers")] public List<CampaignDcaCarrier> Carriers { get; set; } = new();
+}
+
+/// <summary>
+/// A single campaign, its currently-bound numbers, and carrier review progress.
+/// <see cref="Status"/> is CAMPAIGN_DCA_COMPLETE (ready: carrier review finished,
+/// numbers assigned), CAMPAIGN_DCA_COMPLETE_NO_NUMBERS_ASSIGNED, CAMPAIGN_PENDING_DCA
+/// (active at the campaign registry, but carrier (DCA) review is not finished yet;
+/// numbers cannot be enabled until it is), CAMPAIGN_DCA_REJECTED (a carrier's DCA
+/// rejected or suspended the campaign; see <see cref="Dca"/>), CAMPAIGN_&lt;registry
+/// status&gt;, or CAMPAIGN_INVALID_ID.
+/// </summary>
 public sealed class CampaignStatusItem
 {
     [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
     [JsonPropertyName("status")] public string Status { get; set; } = string.Empty;
     [JsonPropertyName("numbers")] public List<string> Numbers { get; set; } = new();
+    /// <summary>Carrier (DCA) review progress; <c>null</c> for CAMPAIGN_INVALID_ID.</summary>
+    [JsonPropertyName("dca")] public CampaignDca? Dca { get; set; }
 }
 
 /// <summary>Response data for <c>GET /v2.2/messaging/campaigns</c>.</summary>

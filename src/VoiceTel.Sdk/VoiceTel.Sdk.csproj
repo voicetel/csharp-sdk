@@ -14,13 +14,13 @@
 
   <PropertyGroup>
     <PackageId>VoiceTel.Sdk</PackageId>
-    <Version>2.2.10</Version>
-    <AssemblyVersion>2.2.10.0</AssemblyVersion>
-    <FileVersion>2.2.10.0</FileVersion>
+    <Version>2.2.14</Version>
+    <AssemblyVersion>2.2.14.0</AssemblyVersion>
+    <FileVersion>2.2.14.0</FileVersion>
     <Authors>VoiceTel</Authors>
     <Company>VoiceTel Communications</Company>
     <Product>VoiceTel C# / .NET SDK</Product>
-    <Description>Official C# / .NET SDK for the VoiceTel REST API (v2.2.10). Provision numbers, place orders, validate e911, send messages, and manage your account.</Description>
+    <Description>Official C# / .NET SDK for the VoiceTel REST API (v2.2.14). Provision numbers, place orders, validate e911, send messages, and manage your account.</Description>
     <Copyright>Copyright (c) 2026 VoiceTel Communications</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://voicetel.com/docs/api/v2.2/</PackageProjectUrl>

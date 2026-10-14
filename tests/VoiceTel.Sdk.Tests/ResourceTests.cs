@@ -104,11 +104,11 @@ public class ResourceTests
     public async Task Authentication_GetUpdate()
     {
         var (c, h) = TestFactory.NewClient();
-        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/auth", "{\"authType\":1,\"authTypeDescription\":\"IP\",\"acl\":[]}");
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/auth", "{\"authType\":1,\"authTypeDescription\":\"Lax (Digest | IP)\",\"acl\":[]}");
         h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/auth", "{\"updated\":[{\"field\":\"authType\",\"value\":1}]}");
         var g = await c.Authentication.GetAsync();
         Assert.Equal(1, g.AuthType);
-        var u = await c.Authentication.UpdateAsync(new AuthPutRequest { AuthType = AuthTypes.IpAuth });
+        var u = await c.Authentication.UpdateAsync(new AuthPutRequest { AuthType = AuthTypes.Lax });
         Assert.Single(u.Updated);
     }
 
@@ -192,8 +192,18 @@ public class ResourceTests
         var p = await c.INumbering.SubmitPortAsync(new PortSubmitRequest
         {
             Did = new List<string> { "2015550123" },
-            Name = "n", NameType = "business", LcBtn = "1", LcAccountNumber = "1",
-            StreetNumber = "1", Street = "Main", StreetType = "ST", City = "NWK", State = "NJ", Zip = "07102", Country = "US", AuthPerson = "X",
+            Name = "n",
+            NameType = "business",
+            LcBtn = "1",
+            LcAccountNumber = "1",
+            StreetNumber = "1",
+            Street = "Main",
+            StreetType = "ST",
+            City = "NWK",
+            State = "NJ",
+            Zip = "07102",
+            Country = "US",
+            AuthPerson = "X",
         });
         Assert.Equal("ABCDE", p.Pid);
 
@@ -259,7 +269,8 @@ public class ResourceTests
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/messaging/brands",
             "{\"result\":{\"statusCode\":\"200\",\"status\":\"Success\"}}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/messaging/campaigns",
-            "{\"campaigns\":[{\"id\":\"c\",\"status\":\"ACTIVE\",\"numbers\":[]}]}");
+            "{\"campaigns\":[{\"id\":\"c\",\"status\":\"CAMPAIGN_PENDING_DCA\",\"numbers\":[\"2015550123\"]," +
+            "\"dca\":{\"electionComplete\":false,\"electedCarriers\":[\"AT&T\"],\"carriers\":[]}}]}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/messaging/campaigns",
             "{\"result\":{\"statusCode\":\"200\",\"status\":\"Success\"}}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/messaging", "{\"numbers\":[]}");
@@ -274,7 +285,9 @@ public class ResourceTests
         Assert.Contains("\"toNumber\":\"b\"", sendBody);
 
         await c.Messaging.CreateBrandAsync(new MessagingBrandCreateRequest { MessagingBrandId = "Bx", MessagingBrandName = "n" });
-        await c.Messaging.CampaignStatusAsync();
+        var cs = await c.Messaging.CampaignStatusAsync();
+        Assert.Equal("CAMPAIGN_PENDING_DCA", cs.Campaigns[0].Status);
+        Assert.False(cs.Campaigns[0].Dca!.ElectionComplete);
         await c.Messaging.CreateCampaignAsync(new MessagingCampaignCreateRequest { MessagingBrandId = "Bx", ExternalCampaignId = "e", CampaignDescription = "d" });
         await c.Messaging.NumbersStateAsync(new[] { "2015550123", "2015551235" });
     }
@@ -347,29 +360,39 @@ public class ResourceTests
     {
         var (c, h) = TestFactory.NewClient();
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/n/messaging",
-            "{\"number\":\"n\",\"enabled\":true,\"carrier\":17,\"routeIn\":1,\"resource\":\"r\",\"network\":\"A\",\"campaign\":{\"id\":\"c\",\"network\":\"A\",\"status\":\"ACTIVE\",\"upstreamCnpId\":\"u\"}}");
+            "{\"number\":\"n\",\"enabled\":true,\"carrier\":1,\"routeIn\":1,\"resource\":\"r\",\"network\":\"C\"," +
+            "\"campaign\":{\"id\":\"c\",\"network\":\"A\",\"status\":\"ACTIVE\",\"upstreamCnpId\":\"u\"}," +
+            "\"pending\":{\"campaignId\":\"c\",\"state\":\"routing\",\"message\":\"assigning routes\",\"createdAt\":\"t1\",\"updatedAt\":\"t2\"}}");
         h.EnqueueEnvelope(new HttpMethod("PATCH"), "/v2.2/numbers/n/messaging", "{\"number\":\"n\",\"updated\":[\"routeIn\"]}");
         h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/numbers/n/messaging-campaign",
-            "{\"number\":\"n\",\"campaignId\":\"c\",\"carrier\":17,\"network\":\"A\",\"upstreamCnpId\":\"u\",\"previousNetwork\":null,\"previousNetworkCleared\":false}");
+            "{\"number\":\"n\",\"campaignId\":\"c\",\"status\":\"enabled\",\"carrier\":19,\"network\":\"B\",\"upstreamCnpId\":\"CAMP003\"," +
+            "\"alreadyAssigned\":false,\"previousNetwork\":\"A\",\"previousNetworkCleared\":true,\"orderId\":\"987654\"," +
+            "\"warning\":null,\"message\":null,\"job\":null}");
         h.EnqueueEnvelope(HttpMethod.Delete, "/v2.2/numbers/n/messaging-campaign",
             "{\"number\":\"n\",\"campaignId\":\"c\",\"network\":\"A\",\"upstreamCnpId\":\"u\",\"unassigned\":true}");
         h.EnqueueEnvelope(HttpMethod.Delete, "/v2.2/numbers/messaging-campaign",
             "{\"campaignId\":\"c\",\"network\":\"A\",\"upstreamCnpId\":\"u\",\"unassignedNumbers\":[\"n\"]}");
         h.EnqueueEnvelope(new HttpMethod("PATCH"), "/v2.2/numbers/n/port-out-pin",
-            "{\"number\":\"n\",\"portOutPin\":\"1234\"}");
+            "{\"number\":\"n\",\"portOutPin\":\"1234\",\"changed\":true}");
 
         var ms = await c.Numbers.GetMessagingAsync("n");
         Assert.Equal("ACTIVE", ms.Campaign!.Status);
+        Assert.Equal("C", ms.Network);
+        Assert.Equal("routing", ms.Pending!.State);
         var pm = await c.Numbers.PatchMessagingAsync("n", new NumberMessagingPatchRequest { RouteIn = 1 });
         Assert.Contains("routeIn", pm.Updated);
         var ac = await c.Numbers.AssignCampaignAsync("n", new NumberCampaignAssignRequest { CampaignId = "c" });
-        Assert.Equal("A", ac.Network);
+        Assert.Equal("enabled", ac.Status);
+        Assert.Equal("B", ac.Network);
+        Assert.False(ac.AlreadyAssigned);
+        Assert.Equal("987654", ((System.Text.Json.JsonElement)ac.OrderId!).GetString());
         var uc = await c.Numbers.UnassignCampaignAsync("n");
         Assert.True(uc.Unassigned);
         var bulk = await c.Numbers.BulkUnassignCampaignAsync(new[] { "n" });
         Assert.Single(bulk.UnassignedNumbers);
         var pin = await c.Numbers.SetPortOutPinAsync("n", new PortOutPinUpdateRequest { Pin = "1234" });
         Assert.Equal("1234", pin.PortOutPin);
+        Assert.True(pin.Changed);
     }
 
     // ----------------------------------------------------------------- Support ---

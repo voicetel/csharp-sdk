@@ -110,6 +110,24 @@ public sealed class CampaignBinding
     [JsonPropertyName("upstreamCnpId")] public string UpstreamCnpId { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// State of an asynchronous (path C) enablement. <see cref="State"/> progresses
+/// queued -> hosting -> assigning -> routing -> done, or failed (see <see cref="Message"/>);
+/// the number keeps its previous routing until done. Attached to a campaign
+/// assignment (<c>Status</c> "pending") or surfaced by
+/// <c>GET /v2.2/numbers/{number}/messaging</c> while provisioning is in flight.
+/// </summary>
+public sealed class MessagingEnablementJob
+{
+    [JsonPropertyName("campaignId")] public string CampaignId { get; set; } = string.Empty;
+    /// <summary>queued, hosting, assigning, routing, done, or failed.</summary>
+    [JsonPropertyName("state")] public string State { get; set; } = string.Empty;
+    /// <summary>Latest progress note, or the reason for failure.</summary>
+    [JsonPropertyName("message")] public string Message { get; set; } = string.Empty;
+    [JsonPropertyName("createdAt")] public string CreatedAt { get; set; } = string.Empty;
+    [JsonPropertyName("updatedAt")] public string UpdatedAt { get; set; } = string.Empty;
+}
+
 /// <summary>Messaging-routing state for one number.</summary>
 public sealed class NumberMessagingState
 {
@@ -119,8 +137,11 @@ public sealed class NumberMessagingState
     [JsonPropertyName("carrier")] public int Carrier { get; set; }
     [JsonPropertyName("routeIn")] public int RouteIn { get; set; }
     [JsonPropertyName("resource")] public string Resource { get; set; } = string.Empty;
+    /// <summary>Messaging path the number is currently on ("A", "B", or "C"); <c>null</c> when carrier is 0 or any non-messaging carrier.</summary>
     [JsonPropertyName("network")] public string? Network { get; set; }
     [JsonPropertyName("campaign")] public CampaignBinding? Campaign { get; set; }
+    /// <summary>Async path-C enablement in progress for this number; <c>null</c> when none.</summary>
+    [JsonPropertyName("pending")] public MessagingEnablementJob? Pending { get; set; }
 }
 
 /// <summary>Response data for <c>POST /v2.2/numbers</c>.</summary>
@@ -197,16 +218,48 @@ public sealed class NumberTranslationData
     [JsonPropertyName("translation")] public string Translation { get; set; } = string.Empty;
 }
 
-/// <summary>Response data for <c>PUT /v2.2/numbers/{number}/messaging-campaign</c>.</summary>
+/// <summary>
+/// Response data for <c>PUT /v2.2/numbers/{number}/messaging-campaign</c>.
+/// <para>
+/// Result of binding a single number to a 10DLC campaign. The campaign must be
+/// available to the account and ACTIVE; the number is enabled on the messaging
+/// path the campaign lives on. Idempotent: a number already bound to the campaign
+/// reports <see cref="Status"/> "already".
+/// </para>
+/// <para>
+/// <see cref="Status"/> is "enabled" (bound now, path B), "already" (the number was
+/// already bound to this campaign — records reconciled, no new order), or "pending"
+/// (accepted and being provisioned on path C — poll
+/// <c>GET /v2.2/numbers/{number}/messaging</c> until the job's state is done or
+/// failed). <see cref="OrderId"/> (a string or number on the wire) is set for
+/// path-B assignments only; path C reports a <see cref="Job"/> instead.
+/// </para>
+/// </summary>
 public sealed class NumberMessagingCampaignAssignData
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
     [JsonPropertyName("campaignId")] public string CampaignId { get; set; } = string.Empty;
+    /// <summary>"enabled" (bound now, path B), "already" (already bound, no new order), or "pending" (provisioning asynchronously on path C).</summary>
+    [JsonPropertyName("status")] public string Status { get; set; } = string.Empty;
+    /// <summary>Outbound carrier id the number routes through once enabled (19 = path B, 1 = path C).</summary>
     [JsonPropertyName("carrier")] public int Carrier { get; set; }
+    /// <summary>Messaging path the campaign resolves to ("B" or "C"); path B is assigned synchronously, path C asynchronously.</summary>
     [JsonPropertyName("network")] public string? Network { get; set; }
+    /// <summary>CNP ID from the CSP sharing record: CAMP003 = path B, BANDW = path C.</summary>
     [JsonPropertyName("upstreamCnpId")] public string? UpstreamCnpId { get; set; }
+    /// <summary>True when the number was already bound to this campaign on the target messaging path; records are reconciled and no new network order is placed.</summary>
+    [JsonPropertyName("alreadyAssigned")] public bool AlreadyAssigned { get; set; }
+    /// <summary>Messaging path the number was bound to before this call ("A" or "B"); <c>null</c> if there was no prior binding.</summary>
     [JsonPropertyName("previousNetwork")] public string? PreviousNetwork { get; set; }
     [JsonPropertyName("previousNetworkCleared")] public bool PreviousNetworkCleared { get; set; }
+    /// <summary>Network order id created for a path-B assignment. <c>null</c> for path C (see <see cref="Job"/>), idempotent no-ops, and assignments confirmed without a new order.</summary>
+    [JsonPropertyName("orderId")] public object? OrderId { get; set; }
+    /// <summary>Non-fatal condition detected during the assignment (for example a stale registration on the other messaging path whose removal has been requested).</summary>
+    [JsonPropertyName("warning")] public string? Warning { get; set; }
+    /// <summary>Human-readable note for a pending enablement.</summary>
+    [JsonPropertyName("message")] public string? Message { get; set; }
+    /// <summary>Async path-C enablement job when <see cref="Status"/> is "pending"; <c>null</c> otherwise.</summary>
+    [JsonPropertyName("job")] public MessagingEnablementJob? Job { get; set; }
 }
 
 /// <summary>Response data for <c>DELETE /v2.2/numbers/{number}/messaging-campaign</c>.</summary>
@@ -248,9 +301,16 @@ public sealed class NumbersMessagingListData
     [JsonPropertyName("numbers")] public List<NumberMessagingState> Numbers { get; set; } = new();
 }
 
-/// <summary>Response data for <c>PATCH /v2.2/numbers/{number}/port-out-pin</c>.</summary>
+/// <summary>
+/// Response data for <c>PATCH /v2.2/numbers/{number}/port-out-pin</c>.
+/// Idempotent: a PIN is locked for 30 days once set, so a number that already has
+/// one returns it unchanged with <see cref="Changed"/> <c>false</c>.
+/// </summary>
 public sealed class PortOutPinUpdateData
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
+    /// <summary>The port-out PIN now on file for this number (the value just set, or the existing value if the number was already locked).</summary>
     [JsonPropertyName("portOutPin")] public string PortOutPin { get; set; } = string.Empty;
+    /// <summary>True if this request set the PIN; false if the number already had one, which is locked for 30 days once set and is returned unchanged.</summary>
+    [JsonPropertyName("changed")] public bool Changed { get; set; }
 }

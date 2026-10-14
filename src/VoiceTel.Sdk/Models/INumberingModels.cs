@@ -157,7 +157,6 @@ public sealed class PortSummary
     [JsonPropertyName("foc")] public string? Foc { get; set; }
     [JsonPropertyName("createdAt")] public string? CreatedAt { get; set; }
     [JsonPropertyName("message")] public string? Message { get; set; }
-    [JsonPropertyName("supportUrl")] public string? SupportUrl { get; set; }
 }
 
 /// <summary>Full record for a single port-in.</summary>

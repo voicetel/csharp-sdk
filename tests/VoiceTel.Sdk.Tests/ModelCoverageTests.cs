@@ -31,12 +31,23 @@ public class ModelCoverageTests
     public void AccountModels_Roundtrip()
     {
         Roundtrip(new AccountRates { Cnam = 1, IntlMax = 2, Nibble = 3, Lrn = 4, Fax = 5, TfAdj = 6, Did = 7, Mms = 8, Sms = 9 });
-        Roundtrip(new AccountServices { E911 = true, Cnam = true, BypassMedia = true, Intl = true, Rcid = true, Mms = true, Dialer = true, Sms = true });
+        Roundtrip(new AccountServices { E911 = true, Cnam = true, BypassMedia = true, Intl = true, Mms = true, Dialer = true, Sms = true });
         Roundtrip(new AccountData
         {
-            Username = "u", Name = "n", Email = "e", Enabled = true, Created = "c", Cash = 1, CallerId = "ci",
-            Timezone = "tz", AuthType = 1, Ccs = 2, Notify = true, NotifyThreshold = 3,
-            Rates = new AccountRates(), Services = new AccountServices(),
+            Username = "u",
+            Name = "n",
+            Email = "e",
+            Enabled = true,
+            Created = "c",
+            Cash = 1,
+            CallerId = "ci",
+            Timezone = "tz",
+            AuthType = 1,
+            Ccs = 2,
+            Notify = true,
+            NotifyThreshold = 3,
+            Rates = new AccountRates(),
+            Services = new AccountServices(),
         });
         Roundtrip(new CreditEntry { Date = "d", Paid = true, Amount = 1 });
         Roundtrip(new PaymentEntry { TransactionId = "t", Date = "d", PayerEmail = "p", Status = "s", Amount = 1 });
@@ -75,9 +86,9 @@ public class ModelCoverageTests
         Roundtrip(new AuthPutData { Updated = new() });
         Roundtrip(new AuthPutConflictData { Updated = new() });
         Assert.Equal(0, AuthTypes.Digest);
-        Assert.Equal(1, AuthTypes.IpAuth);
-        Assert.Equal(2, AuthTypes.DigestOrIp);
-        Assert.Equal(3, AuthTypes.DigestAndIp);
+        Assert.Equal(1, AuthTypes.Lax);
+        Assert.Equal(2, AuthTypes.Ip);
+        Assert.Equal(3, AuthTypes.Strict);
     }
 
     [Fact]
@@ -111,14 +122,32 @@ public class ModelCoverageTests
         Roundtrip(new PortFeature { Number = "n", Routing = new(), Lidb = new(), Sms = new() });
         Roundtrip(new PortSubmitRequest
         {
-            Did = new() { "n" }, Name = "n", NameType = "business", LcBtn = "l", LcAccountNumber = "a",
-            StreetNumber = "1", Street = "s", StreetType = "ST", City = "c", State = "s", Zip = "z", Country = "US", AuthPerson = "p",
-            StreetPrefix = "N", StreetSuffix = "S", Floor = "1", Room = "2", Building = "B", UnitValue = "U",
-            DesiredDueDate = "2026-01-01", Pin = "1234", Features = new(),
+            Did = new() { "n" },
+            Name = "n",
+            NameType = "business",
+            LcBtn = "l",
+            LcAccountNumber = "a",
+            StreetNumber = "1",
+            Street = "s",
+            StreetType = "ST",
+            City = "c",
+            State = "s",
+            Zip = "z",
+            Country = "US",
+            AuthPerson = "p",
+            StreetPrefix = "N",
+            StreetSuffix = "S",
+            Floor = "1",
+            Room = "2",
+            Building = "B",
+            UnitValue = "U",
+            DesiredDueDate = "2026-01-01",
+            Pin = "1234",
+            Features = new(),
         });
         Roundtrip(new InventoryItem { Number = "n", RateCenter = "r", City = "c", Province = "p", Lata = "l" });
         Roundtrip(new InventoryCoverageItem { Count = 1, Npa = "201", Nxx = "555", Block = "1", City = "c", RcAbbre = "r", Lata = "l", LocState = "s" });
-        Roundtrip(new PortSummary { Status = "s", Id = "i", Pid = "p", Foc = "f", CreatedAt = "c", Message = "m", SupportUrl = "u" });
+        Roundtrip(new PortSummary { Status = "s", Id = "i", Pid = "p", Foc = "f", CreatedAt = "c", Message = "m" });
         Roundtrip(new PortDetail { Status = "s", Id = "i", Pid = "p", Name = "n", Email = "e", Foc = "f", CreatedAt = "c", Numbers = new() { "n" }, Message = "m" });
         Roundtrip(new InventorySearchData());
         Roundtrip(new InventoryCoverageData());
@@ -171,7 +200,9 @@ public class ModelCoverageTests
         Roundtrip(new MessagingBrandCreateData { Result = new() });
         Roundtrip(new CampaignRegistrationResult { StatusCode = "200", Status = "Success" });
         Roundtrip(new MessagingCampaignCreateData { Result = new() });
-        Roundtrip(new CampaignStatusItem { Id = "i", Status = "ACTIVE", Numbers = new() { "n" } });
+        Roundtrip(new CampaignStatusItem { Id = "i", Status = "CAMPAIGN_PENDING_DCA", Numbers = new() { "n" }, Dca = new CampaignDca { ElectionComplete = false, ElectedCarriers = new() { "AT&T", "Verizon Wireless" }, Carriers = new() { new CampaignDcaCarrier { Carrier = "AT&T", Status = "ACTIVE", Detail = "Campaign approved", UpdatedAt = "t" } } } });
+        Roundtrip(new CampaignDca { ElectionComplete = true, ElectedCarriers = null, Carriers = new() });
+        Roundtrip(new CampaignDcaCarrier { Carrier = "T-Mobile", Status = "REJECTED", Detail = "d", UpdatedAt = "t" });
         Roundtrip(new MessagingCampaignStatusData());
     }
 
@@ -193,7 +224,8 @@ public class ModelCoverageTests
         Roundtrip(new BulkUnassignRequest { Numbers = new() { "n" } });
         Roundtrip(new NumberDetail { Number = "n", Translated = "t", Route = 4, Gateway = "g", Cnam = true, Forward = true, ForwardTo = "f", Carrier = 1, SmsEnabled = true, FaxEnabled = true });
         Roundtrip(new CampaignBinding { Id = "i", Network = "A", Status = "ACTIVE", UpstreamCnpId = "u" });
-        Roundtrip(new NumberMessagingState { Number = "n", OnAccount = true, Enabled = true, Carrier = 1, RouteIn = 1, Resource = "r", Network = "A", Campaign = new() });
+        Roundtrip(new MessagingEnablementJob { CampaignId = "CAMP002", State = "routing", Message = "m", CreatedAt = "c", UpdatedAt = "u" });
+        Roundtrip(new NumberMessagingState { Number = "n", OnAccount = true, Enabled = true, Carrier = 1, RouteIn = 1, Resource = "r", Network = "C", Campaign = new(), Pending = new MessagingEnablementJob { CampaignId = "CAMP002", State = "queued", Message = "m", CreatedAt = "c", UpdatedAt = "u" } });
         Roundtrip(new NumberAddData { Number = "n", Route = 4 });
         Roundtrip(new NumberCnamData { Number = "n", Cnam = true });
         Roundtrip(new NumberFaxData { Number = "n", Email = "e" });
@@ -204,13 +236,14 @@ public class ModelCoverageTests
         Roundtrip(new NumberRouteData { Number = "n", Route = 4 });
         Roundtrip(new NumberSmsData { Number = "n", Type = "email", Resource = "r" });
         Roundtrip(new NumberTranslationData { Number = "n", Translation = "1" });
-        Roundtrip(new NumberMessagingCampaignAssignData { Number = "n", CampaignId = "c", Carrier = 17, Network = "A", UpstreamCnpId = "u", PreviousNetwork = "B", PreviousNetworkCleared = true });
+        Roundtrip(new NumberMessagingCampaignAssignData { Number = "n", CampaignId = "c", Status = "enabled", Carrier = 19, Network = "B", UpstreamCnpId = "CAMP003", AlreadyAssigned = false, PreviousNetwork = "A", PreviousNetworkCleared = true, OrderId = "o1", Warning = null, Message = null, Job = null });
+        Roundtrip(new NumberMessagingCampaignAssignData { Number = "n", CampaignId = "c", Status = "pending", Carrier = 1, Network = "C", UpstreamCnpId = "BANDW", AlreadyAssigned = false, PreviousNetwork = null, PreviousNetworkCleared = false, OrderId = null, Warning = "w", Message = "m", Job = new MessagingEnablementJob { CampaignId = "c", State = "queued", Message = "m", CreatedAt = "c", UpdatedAt = "u" } });
         Roundtrip(new NumberMessagingCampaignUnassignData { Number = "n", CampaignId = "c", Network = "A", UpstreamCnpId = "u", Unassigned = true });
         Roundtrip(new CampaignUnassignFailure { Number = "n", Reason = "r" });
         Roundtrip(new NumbersMessagingCampaignUnassignData { CampaignId = "c", Network = "A", UpstreamCnpId = "u", UnassignedNumbers = new() { "n" }, Failed = new() });
         Roundtrip(new NumbersListData());
         Roundtrip(new NumbersMessagingListData());
-        Roundtrip(new PortOutPinUpdateData { Number = "n", PortOutPin = "1234" });
+        Roundtrip(new PortOutPinUpdateData { Number = "n", PortOutPin = "1234", Changed = true });
     }
 
     [Fact]
@@ -233,16 +266,52 @@ public class ModelCoverageTests
         Roundtrip(new SupportCustomer { Id = 1, FirstName = "f", LastName = "l", Email = "e", Company = "c", JobTitle = "j", PhotoType = "p", PhotoUrl = "u", Notes = "n", Type = "customer", CreatedAt = "c", UpdatedAt = "u", Embedded = new() });
         Roundtrip(new SupportThread
         {
-            Id = 1, Status = "active", State = "s", Type = "message", Body = "b", Rating = 5, RatingComment = "r",
-            OpenedAt = "o", CreatedAt = "c", Source = new(), Action = new(), CreatedBy = new(), AssignedTo = new(),
-            Customer = new(), To = new() { "t" }, Cc = new() { "c" }, Bcc = new() { "b" }, Embedded = new(),
+            Id = 1,
+            Status = "active",
+            State = "s",
+            Type = "message",
+            Body = "b",
+            Rating = 5,
+            RatingComment = "r",
+            OpenedAt = "o",
+            CreatedAt = "c",
+            Source = new(),
+            Action = new(),
+            CreatedBy = new(),
+            AssignedTo = new(),
+            Customer = new(),
+            To = new() { "t" },
+            Cc = new() { "c" },
+            Bcc = new() { "b" },
+            Embedded = new(),
         });
         Roundtrip(new SupportConversation
         {
-            Id = 1, TicketNumber = 1015, Status = "active", State = "s", Subject = "sub", Preview = "p", Type = "t",
-            MailboxId = 1, FolderId = 1, ThreadsCount = 1, ClosedBy = 1, ClosedAt = "c", CreatedAt = "c", UpdatedAt = "u", UserUpdatedAt = "u",
-            CustomerWaitingSince = new(), Source = new(), CreatedBy = new(), Assignee = new(), ClosedByUser = new(),
-            Customer = new(), Cc = new(), Bcc = new(), CustomFields = new(), Embedded = new(),
+            Id = 1,
+            TicketNumber = 1015,
+            Status = "active",
+            State = "s",
+            Subject = "sub",
+            Preview = "p",
+            Type = "t",
+            MailboxId = 1,
+            FolderId = 1,
+            ThreadsCount = 1,
+            ClosedBy = 1,
+            ClosedAt = "c",
+            CreatedAt = "c",
+            UpdatedAt = "u",
+            UserUpdatedAt = "u",
+            CustomerWaitingSince = new(),
+            Source = new(),
+            CreatedBy = new(),
+            Assignee = new(),
+            ClosedByUser = new(),
+            Customer = new(),
+            Cc = new(),
+            Bcc = new(),
+            CustomFields = new(),
+            Embedded = new(),
         });
         Roundtrip(new TicketData { Ticket = new() });
         Roundtrip(new TicketsListData());
@@ -255,8 +324,8 @@ public class ModelCoverageTests
     public void Common_AndSdkInfo()
     {
         Roundtrip(new CidrEntry { Cidr = "1.1.1.1/32" });
-        Assert.Equal("2.2.10", SdkInfo.SdkVersion);
-        Assert.Equal("v2.2.10", SdkInfo.ApiVersion);
+        Assert.Equal("2.2.14", SdkInfo.SdkVersion);
+        Assert.Equal("v2.2.14", SdkInfo.ApiVersion);
         Assert.Equal("https://api.voicetel.com", SdkInfo.DefaultBaseUrl);
         Assert.Contains("voicetel-csharp/", SdkInfo.DefaultUserAgent);
     }
@@ -284,5 +353,66 @@ public class ModelCoverageTests
         Assert.Equal("2015550000", pa!.LocalRoutingNumber);
         Assert.Equal("A", pa.RateCenterTier);
         Assert.Null(pa.Reason);
+    }
+
+    [Fact]
+    public void CampaignAssign_NewFields_DeserializeCorrectly()
+    {
+        var json = "{\"number\":\"2015550123\",\"campaignId\":\"CAMP002\",\"status\":\"enabled\",\"carrier\":19,\"network\":\"B\"," +
+            "\"upstreamCnpId\":\"CAMP003\",\"alreadyAssigned\":false,\"previousNetwork\":\"A\",\"previousNetworkCleared\":true," +
+            "\"orderId\":\"987654\",\"warning\":null,\"message\":null,\"job\":null}";
+        var d = JsonSerializer.Deserialize<NumberMessagingCampaignAssignData>(json);
+        Assert.NotNull(d);
+        Assert.Equal("enabled", d!.Status);
+        Assert.False(d.AlreadyAssigned);
+        Assert.Equal("987654", ((JsonElement)d.OrderId!).GetString());
+        Assert.Null(d.Warning);
+        Assert.Null(d.Message);
+        Assert.Null(d.Job);
+
+        // orderId is string|int|null on the wire
+        var numeric = JsonSerializer.Deserialize<NumberMessagingCampaignAssignData>(
+            "{\"number\":\"n\",\"campaignId\":\"c\",\"status\":\"pending\",\"network\":\"C\",\"orderId\":987654," +
+            "\"job\":{\"campaignId\":\"c\",\"state\":\"hosting\",\"message\":\"m\",\"createdAt\":\"t1\",\"updatedAt\":\"t2\"}}");
+        Assert.NotNull(numeric);
+        Assert.Equal(JsonValueKind.Number, ((JsonElement)numeric!.OrderId!).ValueKind);
+        Assert.Equal("hosting", numeric.Job!.State);
+    }
+
+    [Fact]
+    public void NumberMessagingState_PendingJob_Deserializes()
+    {
+        var json = "{\"number\":\"2015550123\",\"enabled\":true,\"carrier\":1,\"routeIn\":0,\"resource\":\"r\",\"network\":\"C\"," +
+            "\"pending\":{\"campaignId\":\"CAMP002\",\"state\":\"assigning\",\"message\":\"progress\",\"createdAt\":\"t1\",\"updatedAt\":\"t2\"}}";
+        var s = JsonSerializer.Deserialize<NumberMessagingState>(json);
+        Assert.NotNull(s);
+        Assert.Equal("C", s!.Network);
+        Assert.Equal("assigning", s.Pending!.State);
+        Assert.Equal("progress", s.Pending.Message);
+    }
+
+    [Fact]
+    public void CampaignStatus_DcaField_Deserializes()
+    {
+        var json = "{\"campaigns\":[{\"id\":\"CAMP002\",\"status\":\"CAMPAIGN_DCA_REJECTED\",\"numbers\":[\"2015550123\"]," +
+            "\"dca\":{\"electionComplete\":true,\"electedCarriers\":[\"AT&T\",\"T-Mobile\"]," +
+            "\"carriers\":[{\"carrier\":\"T-Mobile\",\"status\":\"REJECTED\",\"detail\":\"Campaign approved\",\"updatedAt\":\"t\"}]}}," +
+            "{\"id\":\"ZZZZZZZ\",\"status\":\"CAMPAIGN_INVALID_ID\",\"numbers\":[],\"dca\":null}]}";
+        var d = JsonSerializer.Deserialize<MessagingCampaignStatusData>(json);
+        Assert.NotNull(d);
+        var first = d!.Campaigns[0];
+        Assert.True(first.Dca!.ElectionComplete);
+        Assert.Equal(2, first.Dca.ElectedCarriers!.Count);
+        Assert.Equal("T-Mobile", first.Dca.Carriers[0].Carrier);
+        Assert.Null(d.Campaigns[1].Dca);
+    }
+
+    [Fact]
+    public void PortOutPinUpdate_ChangedField_Deserializes()
+    {
+        var json = "{\"number\":\"2015550123\",\"portOutPin\":\"1234\",\"changed\":true}";
+        var d = JsonSerializer.Deserialize<PortOutPinUpdateData>(json);
+        Assert.NotNull(d);
+        Assert.True(d!.Changed);
     }
 }

@@ -2,7 +2,7 @@
 
 The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api/v2.2/) — provision numbers, place orders, validate e911, send messages, and manage your account, all with strongly-typed, `async`/`await`-friendly C#.
 
-![Version](https://img.shields.io/badge/version-2.2.10-blue)
+![Version](https://img.shields.io/badge/version-2.2.14-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%20netstandard2.1-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
@@ -48,7 +48,7 @@ The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api
 - **iNumbering** — inventory search, coverage queries, number orders, port-in submissions, port-out availability (with v2.2.10 `localRoutingNumber` and `rateCenterTier` fields).
 - **Support** — ticket create / read / update / delete, threaded messages, replies.
 - **ACL** — IP allowlist management with structured 409 conflict bodies.
-- **Authentication** — switch between Digest, IP-only, or hybrid modes; rotate passwords.
+- **Authentication** — switch between Digest, Lax (Digest | IP), IP, or Strict (Digest + IP) modes; rotate passwords.
 
 ### 🧪 Battle-Tested
 - **xUnit unit tests** that exercise every public method and every error path.
@@ -69,7 +69,7 @@ dotnet add package VoiceTel.Sdk
 Or `<PackageReference>` it directly:
 
 ```xml
-<PackageReference Include="VoiceTel.Sdk" Version="2.2.10" />
+<PackageReference Include="VoiceTel.Sdk" Version="2.2.14" />
 ```
 
 Targets **.NET 8.0** (preferred) and **.NET Standard 2.1**.
@@ -127,7 +127,7 @@ var key = await client.LoginAsync(1000000001, "hunter2");
 |---|---|---|
 | Account | `client.Account` | `await client.Account.CdrAsync(t1, t2)` |
 | ACL | `client.Acl` | `await client.Acl.AddAsync(new AclModifyRequest { ... })` |
-| Authentication | `client.Authentication` | `await client.Authentication.UpdateAsync(new AuthPutRequest { AuthType = AuthTypes.IpAuth })` |
+| Authentication | `client.Authentication` | `await client.Authentication.UpdateAsync(new AuthPutRequest { AuthType = AuthTypes.Lax })` |
 | e911 | `client.E911` | `await client.E911.ValidateAsync(new E911AddressRequest { ... })` |
 | Gateways | `client.Gateways` | `await client.Gateways.ListAsync()` |
 | iNumbering | `client.INumbering` | `await client.INumbering.SearchInventoryAsync(new() { Npa = 201 })` |

@@ -29,7 +29,7 @@ jobs:
         run: dotnet build VoiceTel.Sdk.sln --configuration Release --no-restore
 
       - name: Format check
-        run: dotnet format VoiceTel.Sdk.sln --verify-no-changes --severity warn || true
+        run: dotnet format VoiceTel.Sdk.sln --verify-no-changes --severity warn
 
       - name: Test
         run: |

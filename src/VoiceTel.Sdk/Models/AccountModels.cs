@@ -23,7 +23,6 @@ public sealed class AccountServices
     [JsonPropertyName("cnam")] public bool Cnam { get; set; }
     [JsonPropertyName("bypassMedia")] public bool BypassMedia { get; set; }
     [JsonPropertyName("intl")] public bool Intl { get; set; }
-    [JsonPropertyName("rcid")] public bool Rcid { get; set; }
     [JsonPropertyName("mms")] public bool Mms { get; set; }
     [JsonPropertyName("dialer")] public bool Dialer { get; set; }
     [JsonPropertyName("sms")] public bool Sms { get; set; }
