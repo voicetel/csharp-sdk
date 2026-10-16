@@ -2,7 +2,7 @@
 
 The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api/v2.2/) — provision numbers, place orders, validate e911, send messages, and manage your account, all with strongly-typed, `async`/`await`-friendly C#.
 
-![Version](https://img.shields.io/badge/version-2.2.14-blue)
+![Version](https://img.shields.io/badge/version-2.2.15-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%20netstandard2.1-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
@@ -43,7 +43,7 @@ The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api
 - **Account** — profile, sub-accounts, CDRs, credits, payments, MRC, registration, password recovery.
 - **e911** — record provisioning, address validation, lookup, removal.
 - **Gateways** — list, create, update, delete, view bound numbers.
-- **Messaging** — SMS & MMS sending, message history, 10DLC brand and campaign registration, per-number messaging state.
+- **Messaging** — SMS & MMS sending, message history, 10DLC brand and campaign registration, per-number messaging state, and messaging health (account overview, per-number live check, spam-blocked samples, alert-email setting).
 - **Lookups** — CNAM and LRN dips.
 - **iNumbering** — inventory search, coverage queries, number orders, port-in submissions, port-out availability (with v2.2.10 `localRoutingNumber` and `rateCenterTier` fields).
 - **Support** — ticket create / read / update / delete, threaded messages, replies.
@@ -69,7 +69,7 @@ dotnet add package VoiceTel.Sdk
 Or `<PackageReference>` it directly:
 
 ```xml
-<PackageReference Include="VoiceTel.Sdk" Version="2.2.14" />
+<PackageReference Include="VoiceTel.Sdk" Version="2.2.15" />
 ```
 
 Targets **.NET 8.0** (preferred) and **.NET Standard 2.1**.
@@ -204,7 +204,7 @@ using var client = new VoiceTelClient(apiKey: "...", httpClient: http);
 
 These endpoints are limited to **6 requests per hour per IP**:
 
-- `account/info` (`client.Account.GetAsync`)
+- `account` (`client.Account.GetAsync`)
 - `account/cdr` (`client.Account.CdrAsync`)
 - `account/recurring-charges` (`client.Account.RecurringChargesAsync`)
 - `account/payments` (`client.Account.PaymentsAsync`)

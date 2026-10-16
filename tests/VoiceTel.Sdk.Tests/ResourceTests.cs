@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 using VoiceTel.Sdk.Models;
 using Xunit;
@@ -299,6 +300,45 @@ public class ResourceTests
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/messaging", "{\"numbers\":[]}");
         await c.Messaging.NumbersStateAsync();
         Assert.DoesNotContain("?", h.Captured[0].Request.RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task Messaging_Health_AllMethods()
+    {
+        // v2.2.15: messaging-health endpoints have no response schema in the spec, so the
+        // SDK returns the decoded JSON object as a raw Dictionary<string, object?> (nested
+        // values are JsonElement); request bodies/query are still shaped.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/messaging/health",
+            "{\"summary\":{\"numbers\":3,\"healthy\":2}}");
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/messaging/health/alerts", "{\"enabled\":true}");
+        h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/messaging/health/alerts", "{\"enabled\":false}");
+        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/messaging/health/check",
+            "{\"number\":\"2125550123\",\"inService\":true}");
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/messaging/health/samples",
+            "{\"samples\":[{\"reason\":\"spam\"}]}");
+
+        var health = await c.Messaging.HealthAsync();
+        var summary = (JsonElement)health["summary"]!;
+        Assert.Equal(3, summary.GetProperty("numbers").GetInt32());
+        Assert.Equal("/v2.2/messaging/health", h.Captured[0].Request.RequestUri!.AbsolutePath);
+
+        var alerts = await c.Messaging.HealthAlertsAsync();
+        Assert.True(((JsonElement)alerts["enabled"]!).GetBoolean());
+
+        var off = await c.Messaging.SetHealthAlertsAsync(false);
+        Assert.False(((JsonElement)off["enabled"]!).GetBoolean());
+        Assert.Equal(HttpMethod.Put, h.Captured[2].Request.Method);
+        Assert.Contains("\"enabled\":false", h.Captured[2].Body);
+
+        var check = await c.Messaging.HealthCheckAsync("2125550123");
+        Assert.True(((JsonElement)check["inService"]!).GetBoolean());
+        Assert.Contains("\"number\":\"2125550123\"", h.Captured[3].Body);
+
+        var samples = await c.Messaging.HealthSamplesAsync("2125550123");
+        var samplesArr = (JsonElement)samples["samples"]!;
+        Assert.Equal("spam", samplesArr[0].GetProperty("reason").GetString());
+        Assert.Contains("number=2125550123", h.Captured[4].Request.RequestUri!.ToString());
     }
 
     // ----------------------------------------------------------------- Numbers ---

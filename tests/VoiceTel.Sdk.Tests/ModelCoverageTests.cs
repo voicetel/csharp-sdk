@@ -324,8 +324,8 @@ public class ModelCoverageTests
     public void Common_AndSdkInfo()
     {
         Roundtrip(new CidrEntry { Cidr = "1.1.1.1/32" });
-        Assert.Equal("2.2.14", SdkInfo.SdkVersion);
-        Assert.Equal("v2.2.14", SdkInfo.ApiVersion);
+        Assert.Equal("2.2.15", SdkInfo.SdkVersion);
+        Assert.Equal("v2.2.15", SdkInfo.ApiVersion);
         Assert.Equal("https://api.voicetel.com", SdkInfo.DefaultBaseUrl);
         Assert.Contains("voicetel-csharp/", SdkInfo.DefaultUserAgent);
     }
