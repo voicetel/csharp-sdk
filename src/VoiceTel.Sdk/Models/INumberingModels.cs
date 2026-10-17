@@ -43,6 +43,7 @@ public sealed class OrderNumber
 public sealed class OrderNumberSpec
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
+    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Route for numbers in this order.</summary>
     [JsonPropertyName("route")] public int? Route { get; set; }
 }
 

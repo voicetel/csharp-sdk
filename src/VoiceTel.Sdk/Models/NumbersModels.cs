@@ -7,12 +7,14 @@ namespace VoiceTel.Sdk.Models;
 public sealed class NumberAddRequest
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
+    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Used when adding a number.</summary>
     [JsonPropertyName("route")] public int? Route { get; set; }
 }
 
 /// <summary>Body for <c>PUT /v2.2/numbers/{number}/route</c>.</summary>
 public sealed class NumberRouteRequest
 {
+    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Set with <c>PUT /v2.2/numbers/{number}/route</c>.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 
@@ -85,6 +87,7 @@ public sealed class NumberDetail
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
     [JsonPropertyName("translated")] public string Translated { get; set; } = string.Empty;
+    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Per-number route in the list.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
     [JsonPropertyName("gateway")] public string? Gateway { get; set; }
     [JsonPropertyName("cnam")] public bool Cnam { get; set; }
@@ -142,6 +145,7 @@ public sealed class NumberMessagingState
 public sealed class NumberAddData
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
+    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Returned after adding a number.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 
@@ -187,6 +191,7 @@ public sealed class NumberMoveData
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
     [JsonPropertyName("accountId")] public int AccountId { get; set; }
+    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Route on the destination account after the move.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 
@@ -194,6 +199,7 @@ public sealed class NumberMoveData
 public sealed class NumberRouteData
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
+    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Echo of the applied route.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 

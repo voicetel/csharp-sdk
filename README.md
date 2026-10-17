@@ -2,7 +2,7 @@
 
 The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api/v2.2/) — provision numbers, place orders, validate e911, send messages, and manage your account, all with strongly-typed, `async`/`await`-friendly C#.
 
-![Version](https://img.shields.io/badge/version-2.2.16-blue)
+![Version](https://img.shields.io/badge/version-2.2.17-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%20netstandard2.1-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
@@ -69,7 +69,7 @@ dotnet add package VoiceTel.Sdk
 Or `<PackageReference>` it directly:
 
 ```xml
-<PackageReference Include="VoiceTel.Sdk" Version="2.2.16" />
+<PackageReference Include="VoiceTel.Sdk" Version="2.2.17" />
 ```
 
 Targets **.NET 8.0** (preferred) and **.NET Standard 2.1**.
