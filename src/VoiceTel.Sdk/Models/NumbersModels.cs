@@ -80,12 +80,6 @@ public sealed class PortOutPinUpdateRequest
     [JsonPropertyName("pin")] public string Pin { get; set; } = string.Empty;
 }
 
-/// <summary>Body for <c>DELETE /v2.2/numbers/messaging-campaign</c>.</summary>
-public sealed class BulkUnassignRequest
-{
-    [JsonPropertyName("numbers")] public List<string> Numbers { get; set; } = new();
-}
-
 /// <summary>Per-number routing/feature state returned by <c>GET /v2.2/numbers</c> and <c>GET /v2.2/numbers/{number}</c>.</summary>
 public sealed class NumberDetail
 {

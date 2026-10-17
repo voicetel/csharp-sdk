@@ -1,3 +1,4 @@
+using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,12 +17,12 @@ public sealed class LookupsService
 
     /// <summary>Performs a CNAM dip on <paramref name="number"/> (10-digit TN).</summary>
     public Task<CnamData> CnamAsync(string number, CancellationToken cancellationToken = default) =>
-        _t.RequestAsync<CnamData>(HttpMethod.Get, "/v2.2/cnam/" + number, null, null, requireAuth: true, cancellationToken);
+        _t.RequestAsync<CnamData>(HttpMethod.Get, "/v2.2/cnam/" + Uri.EscapeDataString(number), null, null, requireAuth: true, cancellationToken);
 
     /// <summary>
     /// Performs an LRN dip. <paramref name="ani"/> is the presented ANI used only
     /// for billing/auth — it is not echoed back.
     /// </summary>
     public Task<LrnLookupData> LrnAsync(string number, string ani, CancellationToken cancellationToken = default) =>
-        _t.RequestAsync<LrnLookupData>(HttpMethod.Get, "/v2.2/lrn/" + number + "/" + ani, null, null, requireAuth: true, cancellationToken);
+        _t.RequestAsync<LrnLookupData>(HttpMethod.Get, "/v2.2/lrn/" + Uri.EscapeDataString(number) + "/" + Uri.EscapeDataString(ani), null, null, requireAuth: true, cancellationToken);
 }

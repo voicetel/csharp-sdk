@@ -15,7 +15,7 @@ namespace VoiceTel.Sdk.Tests;
 /// </summary>
 public class IntegrationTests
 {
-    private static (int Username, string Password, string BaseUrl)? Creds()
+    private static (string Username, string Password, string BaseUrl)? Creds()
     {
         var u = Environment.GetEnvironmentVariable("VOICETEL_USERNAME");
         var p = Environment.GetEnvironmentVariable("VOICETEL_PASSWORD");
@@ -23,12 +23,8 @@ public class IntegrationTests
         {
             return null;
         }
-        if (!int.TryParse(u, out var un))
-        {
-            return null;
-        }
         var bu = Environment.GetEnvironmentVariable("VOICETEL_BASE_URL");
-        return (un, p, string.IsNullOrEmpty(bu) ? SdkInfo.DefaultBaseUrl : bu!);
+        return (u, p, string.IsNullOrEmpty(bu) ? SdkInfo.DefaultBaseUrl : bu!);
     }
 
     [Trait("Category", "Integration")]

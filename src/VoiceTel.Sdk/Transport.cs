@@ -88,7 +88,7 @@ internal sealed class Transport
         bool requireAuth,
         CancellationToken cancellationToken)
     {
-        var raw = await SendAsync(method, path, query, body, requireAuth, cancellationToken).ConfigureAwait(false);
+        var (raw, statusCode) = await SendAsync(method, path, query, body, requireAuth, cancellationToken).ConfigureAwait(false);
         if (raw.Length == 0)
         {
             return default!;
@@ -104,7 +104,7 @@ internal sealed class Transport
         {
             throw new ApiError(
                 ErrorKind.Unknown,
-                200,
+                statusCode,
                 "decode response body",
                 code: null,
                 body: Encoding.UTF8.GetString(inner),
@@ -127,7 +127,7 @@ internal sealed class Transport
         await SendAsync(method, path, query, body, requireAuth, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<byte[]> SendAsync(
+    private async Task<(byte[] Body, int StatusCode)> SendAsync(
         HttpMethod method,
         string path,
         string? query,
@@ -238,7 +238,7 @@ internal sealed class Transport
             innerException: lastError);
     }
 
-    private static async Task<byte[]> DecodeAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private static async Task<(byte[] Body, int StatusCode)> DecodeAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         byte[] raw;
         if (response.Content is null)
@@ -258,12 +258,12 @@ internal sealed class Transport
         var statusCode = (int)response.StatusCode;
         if (statusCode >= 200 && statusCode < 300)
         {
-            return raw;
+            return (raw, statusCode);
         }
 
         // Error path — try to extract a structured code/message.
         object? body = raw.Length == 0 ? null : Encoding.UTF8.GetString(raw);
-        string? code = null;
+        long? code = null;
         string message = $"HTTP {statusCode}";
 
         if (raw.Length > 0)
@@ -274,21 +274,24 @@ internal sealed class Transport
                 if (doc.RootElement.ValueKind == JsonValueKind.Object)
                 {
                     body = JsonElementToObject(doc.RootElement);
-                    if (doc.RootElement.TryGetProperty("code", out var codeEl) && codeEl.ValueKind == JsonValueKind.String)
+                    // Spec error envelope: {"status":"error","error":{"code":<int>,"message":<string>}}
+                    if (doc.RootElement.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.Object)
                     {
-                        code = codeEl.GetString();
+                        if (errEl.TryGetProperty("code", out var codeEl) &&
+                            codeEl.ValueKind == JsonValueKind.Number &&
+                            codeEl.TryGetInt64(out var c))
+                        {
+                            code = c;
+                        }
+                        if (errEl.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String)
+                        {
+                            message = msgEl.GetString() ?? message;
+                        }
                     }
-                    else if (doc.RootElement.TryGetProperty("error", out var errEl) && errEl.ValueKind == JsonValueKind.String)
+                    else if (doc.RootElement.TryGetProperty("message", out var topMsg) && topMsg.ValueKind == JsonValueKind.String)
                     {
-                        code = errEl.GetString();
-                    }
-                    if (doc.RootElement.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String)
-                    {
-                        message = msgEl.GetString() ?? message;
-                    }
-                    else if (doc.RootElement.TryGetProperty("error", out var errMsg) && errMsg.ValueKind == JsonValueKind.String)
-                    {
-                        message = errMsg.GetString() ?? message;
+                        // Tolerate a bare {"message": "..."} body.
+                        message = topMsg.GetString() ?? message;
                     }
                 }
             }
@@ -379,6 +382,8 @@ internal sealed class Transport
         }
     }
 
+    private static readonly TimeSpan MaxRetryAfter = TimeSpan.FromSeconds(8);
+
     private static TimeSpan BackoffDelay(int attempt, HttpResponseMessage? response)
     {
         if (response is not null)
@@ -386,16 +391,18 @@ internal sealed class Transport
             var retryAfter = response.Headers.RetryAfter;
             if (retryAfter is not null)
             {
+                // Honor Retry-After (delta-seconds or HTTP-date), but never sleep
+                // longer than the 8s cap the exponential backoff uses.
                 if (retryAfter.Delta is { } delta && delta >= TimeSpan.Zero)
                 {
-                    return delta;
+                    return delta > MaxRetryAfter ? MaxRetryAfter : delta;
                 }
                 if (retryAfter.Date is { } date)
                 {
                     var d = date - DateTimeOffset.UtcNow;
                     if (d > TimeSpan.Zero)
                     {
-                        return d;
+                        return d > MaxRetryAfter ? MaxRetryAfter : d;
                     }
                 }
             }

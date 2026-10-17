@@ -8,8 +8,10 @@ namespace VoiceTel.Sdk.Resources;
 /// <summary>
 /// Every operation under the Account tag.
 /// <para>
-/// CDR, recurring-charges, payments, registration, and the api-key exchange
-/// share a 6 req/hour/IP rate limit. Bursting will trigger 429s.
+/// <c>GET /v2.2/account</c>, <c>GET /v2.2/account/cdr</c>,
+/// <c>GET /v2.2/account/recurring-charges</c>, and
+/// <c>POST /v2.2/account/api-key</c> share a 6 req/hour/IP rate limit.
+/// Bursting will trigger 429s.
 /// </para>
 /// </summary>
 public sealed class AccountService
@@ -17,7 +19,7 @@ public sealed class AccountService
     private readonly Transport _t;
     internal AccountService(Transport t) => _t = t;
 
-    /// <summary>Returns the authenticated account's profile.</summary>
+    /// <summary>Returns the authenticated account's profile. Rate-limited.</summary>
     public Task<AccountData> GetAsync(CancellationToken cancellationToken = default) =>
         _t.RequestAsync<AccountData>(HttpMethod.Get, "/v2.2/account", null, null, requireAuth: true, cancellationToken);
 
@@ -29,12 +31,12 @@ public sealed class AccountService
     public Task<AccountAddData> AddAsync(AccountAddRequest body, CancellationToken cancellationToken = default) =>
         _t.RequestAsync<AccountAddData>(HttpMethod.Post, "/v2.2/account", null, body, requireAuth: true, cancellationToken);
 
-    /// <summary>Public sign-up: <c>POST /v2.2/accounts</c>.</summary>
+    /// <summary>Public sign-up: <c>POST /v2.2/accounts</c>. No auth required.</summary>
     public Task<AccountSignupData> SignupAsync(AccountSignupRequest body, CancellationToken cancellationToken = default) =>
-        _t.RequestAsync<AccountSignupData>(HttpMethod.Post, "/v2.2/accounts", null, body, requireAuth: true, cancellationToken);
+        _t.RequestAsync<AccountSignupData>(HttpMethod.Post, "/v2.2/accounts", null, body, requireAuth: false, cancellationToken);
 
     /// <summary>Fetches CDRs in the [start, end] Unix-seconds range. Rate-limited.</summary>
-    public Task<AccountCdrData> CdrAsync(int start, int end, CancellationToken cancellationToken = default)
+    public Task<AccountCdrData> CdrAsync(long start, long end, CancellationToken cancellationToken = default)
     {
         var q = new QueryBuilder();
         q.AddInt("start", start);
@@ -42,19 +44,24 @@ public sealed class AccountService
         return _t.RequestAsync<AccountCdrData>(HttpMethod.Get, "/v2.2/account/cdr", q.HasAny ? q.ToString() : null, null, requireAuth: true, cancellationToken);
     }
 
-    /// <summary>Full credit history, newest first.</summary>
-    public Task<AccountCreditsData> CreditsAsync(CancellationToken cancellationToken = default) =>
-        _t.RequestAsync<AccountCreditsData>(HttpMethod.Get, "/v2.2/account/credits", null, null, requireAuth: true, cancellationToken);
+    /// <summary>Full credit history, newest first. <paramref name="status"/> filters by
+    /// paid/unpaid state (<c>"paid"</c> or <c>"unpaid"</c>); <c>null</c> returns everything.</summary>
+    public Task<AccountCreditsData> CreditsAsync(string? status = null, CancellationToken cancellationToken = default)
+    {
+        var q = new QueryBuilder();
+        q.Add("status", status);
+        return _t.RequestAsync<AccountCreditsData>(HttpMethod.Get, "/v2.2/account/credits", q.HasAny ? q.ToString() : null, null, requireAuth: true, cancellationToken);
+    }
 
     /// <summary>Active monthly-recurring charges. Rate-limited.</summary>
     public Task<AccountMrcData> RecurringChargesAsync(CancellationToken cancellationToken = default) =>
         _t.RequestAsync<AccountMrcData>(HttpMethod.Get, "/v2.2/account/recurring-charges", null, null, requireAuth: true, cancellationToken);
 
-    /// <summary>Full payment history, newest first. Rate-limited.</summary>
+    /// <summary>Full payment history, newest first.</summary>
     public Task<AccountPaymentsData> PaymentsAsync(CancellationToken cancellationToken = default) =>
         _t.RequestAsync<AccountPaymentsData>(HttpMethod.Get, "/v2.2/account/payments", null, null, requireAuth: true, cancellationToken);
 
-    /// <summary>Current SIP registration. Rate-limited.</summary>
+    /// <summary>Current SIP registration.</summary>
     public Task<AccountRegistrationData> RegistrationAsync(CancellationToken cancellationToken = default) =>
         _t.RequestAsync<AccountRegistrationData>(HttpMethod.Get, "/v2.2/account/registration", null, null, requireAuth: true, cancellationToken);
 

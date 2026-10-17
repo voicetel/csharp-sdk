@@ -1,3 +1,4 @@
+using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,13 +32,13 @@ public sealed class E911Service
 
     /// <summary>Fetches the e911 record for <paramref name="dn"/>.</summary>
     public Task<E911RecordData> GetAsync(string dn, CancellationToken cancellationToken = default) =>
-        _t.RequestAsync<E911RecordData>(HttpMethod.Get, "/v2.2/e911/" + dn, null, null, requireAuth: true, cancellationToken);
+        _t.RequestAsync<E911RecordData>(HttpMethod.Get, "/v2.2/e911/" + Uri.EscapeDataString(dn), null, null, requireAuth: true, cancellationToken);
 
     /// <summary>Uses a previously-validated AddressID to provision e911 for <paramref name="dn"/>.</summary>
     public Task<E911RecordData> ProvisionAsync(string dn, E911ProvisionByIdRequest body, CancellationToken cancellationToken = default) =>
-        _t.RequestAsync<E911RecordData>(HttpMethod.Put, "/v2.2/e911/" + dn, null, body, requireAuth: true, cancellationToken);
+        _t.RequestAsync<E911RecordData>(HttpMethod.Put, "/v2.2/e911/" + Uri.EscapeDataString(dn), null, body, requireAuth: true, cancellationToken);
 
     /// <summary>Deletes the e911 record for <paramref name="dn"/>. Returns on 204 No Content.</summary>
     public Task RemoveAsync(string dn, CancellationToken cancellationToken = default) =>
-        _t.RequestAsync(HttpMethod.Delete, "/v2.2/e911/" + dn, null, null, requireAuth: true, cancellationToken);
+        _t.RequestAsync(HttpMethod.Delete, "/v2.2/e911/" + Uri.EscapeDataString(dn), null, null, requireAuth: true, cancellationToken);
 }

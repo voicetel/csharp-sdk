@@ -63,6 +63,17 @@ internal sealed class MockHttpHandler : HttpMessageHandler
             throw new InvalidOperationException("Unexpected HTTP request: " + request.Method + " " + request.RequestUri);
         }
         var exchange = _exchanges.Dequeue();
+        if (exchange.Method != request.Method)
+        {
+            throw new InvalidOperationException(
+                $"Mock expectation mismatch: expected {exchange.Method} {exchange.Path}, got {request.Method} {request.RequestUri}");
+        }
+        var actualPath = request.RequestUri?.AbsolutePath ?? string.Empty;
+        if (!string.IsNullOrEmpty(exchange.Path) && exchange.Path != actualPath)
+        {
+            throw new InvalidOperationException(
+                $"Mock expectation mismatch: expected {exchange.Method} {exchange.Path}, got {request.Method} {request.RequestUri}");
+        }
         var body = string.Empty;
         if (request.Content is not null)
         {

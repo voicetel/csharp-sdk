@@ -91,9 +91,10 @@ public sealed class VoiceTelClient : IDisposable
     /// <summary>
     /// Exchange username + password for a 32-hex API key and install it on
     /// this client. The exchange counts against the 6 req/hour/IP rate limit
-    /// shared by every account/* endpoint.
+    /// shared by <c>GET /v2.2/account</c>, <c>GET /v2.2/account/cdr</c>,
+    /// <c>GET /v2.2/account/recurring-charges</c>, and this endpoint.
     /// </summary>
-    public async Task<string> LoginAsync(int username, string password, CancellationToken cancellationToken = default)
+    public async Task<string> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
     {
         var body = new System.Collections.Generic.Dictionary<string, object?>
         {

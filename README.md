@@ -2,7 +2,7 @@
 
 The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api/v2.2/) — provision numbers, place orders, validate e911, send messages, and manage your account, all with strongly-typed, `async`/`await`-friendly C#.
 
-![Version](https://img.shields.io/badge/version-2.2.15-blue)
+![Version](https://img.shields.io/badge/version-2.2.16-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%20netstandard2.1-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
@@ -26,7 +26,7 @@ The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api
 ## ✨ Features
 
 ### 🛡️ Strongly Typed End-to-End
-- **Native C# classes** for every one of the 73 API operations — serialized with `System.Text.Json`, no reflection magic.
+- **Native C# classes** for every one of the 79 API operations — serialized with `System.Text.Json`, no reflection magic.
 - **Nullable reference types** throughout — distinguish "not set" from "empty" cleanly when PATCH-ing.
 - **Nullable response fields** — `ForwardTo` is `string?` so you can tell apart "no forward configured" from an empty destination.
 - **`CancellationToken` everywhere.** Every method takes a `CancellationToken` as the last argument; cancellation and timeouts propagate cleanly down to the HTTP layer.
@@ -69,7 +69,7 @@ dotnet add package VoiceTel.Sdk
 Or `<PackageReference>` it directly:
 
 ```xml
-<PackageReference Include="VoiceTel.Sdk" Version="2.2.15" />
+<PackageReference Include="VoiceTel.Sdk" Version="2.2.16" />
 ```
 
 Targets **.NET 8.0** (preferred) and **.NET Standard 2.1**.
@@ -82,7 +82,7 @@ using VoiceTel.Sdk;
 using var client = new VoiceTelClient();
 
 // Exchange username + password for an API key (one-time per session)
-await client.LoginAsync(username: 1000000001, password: "hunter2");
+await client.LoginAsync(username: "1000000001", password: "hunter2");
 
 // Typed responses — your IDE knows what `me` is.
 var me = await client.Account.GetAsync();
@@ -100,7 +100,7 @@ Or, if you already have an API key:
 
 ```csharp
 using var client = new VoiceTelClient(apiKey: "32hex...");
-var coverage = await client.INumbering.CoverageAsync(new() { State = "NJ" });
+var coverage = await client.INumbering.CoverageAsync(new() { CountBy = CoverageCountBy.State, LocState = "NJ" });
 foreach (var bucket in coverage.Coverage)
 {
     Console.WriteLine($"{bucket.Npa}-{bucket.Nxx}: {bucket.Count} TNs available");
@@ -117,7 +117,7 @@ Re-fetch the API key after any password change — the old one is invalidated.
 
 ```csharp
 using var client = new VoiceTelClient();
-var key = await client.LoginAsync(1000000001, "hunter2");
+var key = await client.LoginAsync("1000000001", "hunter2");
 // `key` is the new 32-hex bearer; the client already has it installed.
 ```
 
@@ -130,7 +130,7 @@ var key = await client.LoginAsync(1000000001, "hunter2");
 | Authentication | `client.Authentication` | `await client.Authentication.UpdateAsync(new AuthPutRequest { AuthType = AuthTypes.Lax })` |
 | e911 | `client.E911` | `await client.E911.ValidateAsync(new E911AddressRequest { ... })` |
 | Gateways | `client.Gateways` | `await client.Gateways.ListAsync()` |
-| iNumbering | `client.INumbering` | `await client.INumbering.SearchInventoryAsync(new() { Npa = 201 })` |
+| iNumbering | `client.INumbering` | `await client.INumbering.SearchInventoryAsync(new() { TnMask = "201" })` |
 | Lookups | `client.Lookups` | `await client.Lookups.LrnAsync("2015550123", "2015550100")` |
 | Messaging | `client.Messaging` | `await client.Messaging.SendAsync(new MessageSendRequest { ... })` |
 | Numbers | `client.Numbers` | `await client.Numbers.AssignCampaignAsync("2015550123", ...)` |
@@ -204,12 +204,12 @@ using var client = new VoiceTelClient(apiKey: "...", httpClient: http);
 
 These endpoints are limited to **6 requests per hour per IP**:
 
-- `account` (`client.Account.GetAsync`)
-- `account/cdr` (`client.Account.CdrAsync`)
-- `account/recurring-charges` (`client.Account.RecurringChargesAsync`)
-- `account/payments` (`client.Account.PaymentsAsync`)
-- `account/registration` (`client.Account.RegistrationAsync`)
-- `account/api-key` (`client.LoginAsync`)
+- `GET /v2.2/account` (`client.Account.GetAsync`)
+- `GET /v2.2/account/cdr` (`client.Account.CdrAsync`)
+- `GET /v2.2/account/recurring-charges` (`client.Account.RecurringChargesAsync`)
+- `POST /v2.2/account/api-key` (`client.LoginAsync`)
+
+Additionally, `POST /v2.2/messaging/health/check` (`client.Messaging.HealthCheckAsync`) is limited to **30 checks per hour per account**.
 
 The SDK automatically retries 429 responses with `Retry-After` honored, up to `maxRetries` (default 2). To bump it:
 

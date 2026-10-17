@@ -48,14 +48,30 @@ public class TransportTests
     {
         var (client, handler) = TestFactory.NewClient();
         handler.EnqueueJson(HttpMethod.Get, "/v2.2/account",
-            "{\"code\":\"X\",\"message\":\"boom\"}",
+            "{\"status\":\"error\",\"error\":{\"code\":7,\"message\":\"boom\"}}",
             (HttpStatusCode)status);
 
         var ex = await Assert.ThrowsAsync<ApiError>(() => client.Account.GetAsync());
         Assert.Equal(expected, ex.Kind);
         Assert.Equal(status, ex.StatusCode);
-        Assert.Equal("X", ex.Code);
+        Assert.Equal((long?)7, ex.Code);
         Assert.Equal("boom", ex.Message);
+    }
+
+    [Fact]
+    public async Task SpecErrorEnvelope_NestedCodeAndMessageParsed()
+    {
+        // Canonical spec shape: {"status":"error","error":{"code":<int>,"message":<string>}}
+        var (client, handler) = TestFactory.NewClient();
+        handler.EnqueueJson(HttpMethod.Get, "/v2.2/account",
+            "{\"status\":\"error\",\"error\":{\"code\":400,\"message\":\"Field Required\"}}",
+            HttpStatusCode.BadRequest);
+
+        var ex = await Assert.ThrowsAsync<ApiError>(() => client.Account.GetAsync());
+        Assert.Equal(ErrorKind.BadRequest, ex.Kind);
+        Assert.Equal(400, ex.StatusCode);
+        Assert.Equal((long?)400, ex.Code);
+        Assert.Equal("Field Required", ex.Message);
     }
 
     [Fact]
@@ -72,14 +88,15 @@ public class TransportTests
     }
 
     [Fact]
-    public async Task ErrorBodyWithErrorField_PopulatesCodeAndMessage()
+    public async Task ErrorBodyWithBareMessage_PopulatesMessageOnly()
     {
+        // Non-envelope fallback: a bare {"message": "..."} body still surfaces the message.
         var (client, handler) = TestFactory.NewClient();
         handler.EnqueueJson(HttpMethod.Get, "/v2.2/account",
-            "{\"error\":\"NopeError\"}",
+            "{\"message\":\"NopeError\"}",
             HttpStatusCode.BadRequest);
         var ex = await Assert.ThrowsAsync<ApiError>(() => client.Account.GetAsync());
-        Assert.Equal("NopeError", ex.Code);
+        Assert.Null(ex.Code);
         Assert.Equal("NopeError", ex.Message);
     }
 
@@ -175,11 +192,12 @@ public class TransportTests
         handler.EnqueueEnvelope(HttpMethod.Post, "/v2.2/account/api-key",
             "{\"apikey\":\"new-key\"}");
 
-        var key = await client.LoginAsync(1000000001, "hunter2");
+        var key = await client.LoginAsync("1000000001", "hunter2");
 
         Assert.Equal("new-key", key);
         Assert.Equal("new-key", client.ApiKey);
         Assert.Null(handler.Captured[0].Request.Headers.Authorization);
+        Assert.Contains("\"username\":\"1000000001\"", handler.Captured[0].Body);
     }
 
     [Fact]
@@ -189,7 +207,7 @@ public class TransportTests
         var http = new HttpClient(handler);
         using var client = new VoiceTelClient(apiKey: null, baseUrl: "https://x", httpClient: http);
         handler.EnqueueEnvelope(HttpMethod.Post, "/v2.2/account/api-key", "{}");
-        var ex = await Assert.ThrowsAsync<ApiError>(() => client.LoginAsync(1, "p"));
+        var ex = await Assert.ThrowsAsync<ApiError>(() => client.LoginAsync("1", "p"));
         Assert.Equal(ErrorKind.Authentication, ex.Kind);
     }
 

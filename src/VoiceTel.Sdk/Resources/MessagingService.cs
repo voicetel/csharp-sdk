@@ -12,13 +12,13 @@ public sealed class MessagingService
     private readonly Transport _t;
     internal MessagingService(Transport t) => _t = t;
 
-    /// <summary>Fetches message history. Pass <c>new HistoryOptions()</c> for defaults.</summary>
+    /// <summary>Fetches message history. <see cref="HistoryOptions.Number"/> is required.</summary>
     public Task<MessageHistoryData> HistoryAsync(HistoryOptions options, CancellationToken cancellationToken = default)
     {
         var q = new QueryBuilder();
         q.Add("number", options.Number);
-        q.AddInt("start", options.Start);
-        q.AddInt("end", options.End);
+        q.AddInt("from", options.From);
+        q.AddInt("to", options.To);
         q.Add("type", options.Type);
         return _t.RequestAsync<MessageHistoryData>(HttpMethod.Get, "/v2.2/messages", q.HasAny ? q.ToString() : null, null, requireAuth: true, cancellationToken);
     }
@@ -31,29 +31,26 @@ public sealed class MessagingService
     public Task<MessagingBrandCreateData> CreateBrandAsync(MessagingBrandCreateRequest body, CancellationToken cancellationToken = default) =>
         _t.RequestAsync<MessagingBrandCreateData>(HttpMethod.Post, "/v2.2/messaging/brands", null, body, requireAuth: true, cancellationToken);
 
-    /// <summary>Returns the current 10DLC campaign statuses.</summary>
-    public Task<MessagingCampaignStatusData> CampaignStatusAsync(CancellationToken cancellationToken = default) =>
-        _t.RequestAsync<MessagingCampaignStatusData>(HttpMethod.Get, "/v2.2/messaging/campaigns", null, null, requireAuth: true, cancellationToken);
+    /// <summary>Returns the current 10DLC campaign statuses for the given campaign ids (max 100).</summary>
+    public Task<MessagingCampaignStatusData> CampaignStatusAsync(IEnumerable<string> ids, CancellationToken cancellationToken = default)
+    {
+        var q = new QueryBuilder();
+        q.Add("ids", string.Join(",", ids));
+        return _t.RequestAsync<MessagingCampaignStatusData>(HttpMethod.Get, "/v2.2/messaging/campaigns", q.HasAny ? q.ToString() : null, null, requireAuth: true, cancellationToken);
+    }
 
     /// <summary>Registers a 10DLC campaign with the carrier.</summary>
     public Task<MessagingCampaignCreateData> CreateCampaignAsync(MessagingCampaignCreateRequest body, CancellationToken cancellationToken = default) =>
         _t.RequestAsync<MessagingCampaignCreateData>(HttpMethod.Post, "/v2.2/messaging/campaigns", null, body, requireAuth: true, cancellationToken);
 
     /// <summary>
-    /// Returns the messaging state for many numbers at once. Pass <c>null</c> or
-    /// an empty list for "all numbers on the account".
+    /// Returns the messaging state for the given numbers (comma-separated on the
+    /// wire, max 1000). The <c>numbers</c> query parameter is required by the API.
     /// </summary>
-    public Task<NumbersMessagingListData> NumbersStateAsync(IEnumerable<string>? numbers = null, CancellationToken cancellationToken = default)
+    public Task<NumbersMessagingListData> NumbersStateAsync(IEnumerable<string> numbers, CancellationToken cancellationToken = default)
     {
         var q = new QueryBuilder();
-        if (numbers is not null)
-        {
-            var joined = string.Join(",", numbers);
-            if (!string.IsNullOrEmpty(joined))
-            {
-                q.Add("numbers", joined);
-            }
-        }
+        q.Add("numbers", string.Join(",", numbers));
         return _t.RequestAsync<NumbersMessagingListData>(HttpMethod.Get, "/v2.2/numbers/messaging", q.HasAny ? q.ToString() : null, null, requireAuth: true, cancellationToken);
     }
 

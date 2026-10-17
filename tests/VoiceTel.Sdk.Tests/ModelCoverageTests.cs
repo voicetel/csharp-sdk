@@ -58,8 +58,8 @@ public class ModelCoverageTests
         Roundtrip(new AccountPaymentsData());
         Roundtrip(new MrcCharge { Amount = 1, Description = "d" });
         Roundtrip(new AccountMrcData { Total = 1 });
-        Roundtrip(new AccountRegistrationData { Agent = "a", Uri = "u", Expires = 1 });
-        Roundtrip(new AccountAddRequest { Username = 1, Name = "n", Email = "e", MasterAccount = 2 });
+        Roundtrip(new AccountRegistrationData { Agent = "a", Uri = "u" });
+        Roundtrip(new AccountAddRequest { Username = "1000000002", Name = "n", Email = "e", MasterAccount = "1000000001" });
         Roundtrip(new AccountAddData { Username = "u", Name = "n", Email = "e", MasterAccount = "m", Password = "p" });
         Roundtrip(new AccountPutRequest { Notify = true, NotifyThreshold = 1, Timezone = "tz", CallerId = "ci", E911 = true, Intl = true, Sms = true, Mms = true, Ccs = 1 });
         Roundtrip(new AccountPutData { Updated = new List<string> { "x" } });
@@ -159,22 +159,28 @@ public class ModelCoverageTests
         Roundtrip(new PortAvailabilityData { Number = "n", Portable = true, LosingCarrier = "c", LocalRoutingNumber = "l", RateCenterTier = "A", Reason = "r" });
 
         // Touch the query POCOs
-        var iq = new InventoryQuery { Npa = 1, Nxx = 2, State = "s", RateCenter = "r", Contains = "c", EndsWith = "e", Limit = 1 };
-        Assert.Equal(1, iq.Npa);
-        Assert.Equal(2, iq.Nxx);
-        Assert.Equal("s", iq.State);
+        var iq = new InventoryQuery { TnMask = "201555*", Quantity = 10, Province = "NJ", RateCenter = "r", Lata = "224" };
+        Assert.Equal("201555*", iq.TnMask);
+        Assert.Equal((int?)10, iq.Quantity);
+        Assert.Equal("NJ", iq.Province);
         Assert.Equal("r", iq.RateCenter);
-        Assert.Equal("c", iq.Contains);
-        Assert.Equal("e", iq.EndsWith);
-        Assert.Equal(1, iq.Limit);
-        var cq = new CoverageQuery { State = "s", RateCenter = "r" };
-        Assert.Equal("s", cq.State);
-        Assert.Equal("r", cq.RateCenter);
+        Assert.Equal("224", iq.Lata);
+        var cq = new CoverageQuery { CountBy = CoverageCountBy.State, LocState = "NJ", City = "c", RcAbbre = "r", Npa = "201", Lata = "224" };
+        Assert.Equal("state", cq.CountBy);
+        Assert.Equal("NJ", cq.LocState);
+        Assert.Equal("c", cq.City);
+        Assert.Equal("r", cq.RcAbbre);
+        Assert.Equal("201", cq.Npa);
+        Assert.Equal("224", cq.Lata);
+        Assert.Equal("city", CoverageCountBy.City);
+        Assert.Equal("rateCenter", CoverageCountBy.RateCenter);
+        Assert.Equal("npanxx", CoverageCountBy.NpaNxx);
+        Assert.Equal("block", CoverageCountBy.Block);
 
-        var hopts = new HistoryOptions { Number = "n", Start = 1, End = 2, Type = "sms" };
+        var hopts = new HistoryOptions { Number = "n", From = 1, To = 2, Type = "sms" };
         Assert.Equal("n", hopts.Number);
-        Assert.Equal(1, hopts.Start);
-        Assert.Equal(2, hopts.End);
+        Assert.Equal((long?)1, hopts.From);
+        Assert.Equal((long?)2, hopts.To);
         Assert.Equal("sms", hopts.Type);
     }
 
@@ -192,7 +198,7 @@ public class ModelCoverageTests
         Roundtrip(new MessageSendRequest { FromNumber = "f", ToNumber = "t", Text = "x", Subject = "s", MediaUrls = new() { "u" } });
         Roundtrip(new MessagingBrandCreateRequest { MessagingBrandId = "B", MessagingBrandName = "n", MessagingBrandDescription = "d" });
         Roundtrip(new MessagingCampaignCreateRequest { MessagingBrandId = "B", ExternalCampaignId = "e", CampaignDescription = "d", CampaignClassName = "c", CampaignStartDate = "s" });
-        Roundtrip(new MessageRecordValue { SourceNumber = "s", DestinationNumber = "d", Direction = "in", Rate = "0.01", Number = 1, Message = "m" });
+        Roundtrip(new MessageRecordValue { SourceNumber = "s", DestinationNumber = "d", Direction = "in", Rate = "0.01", Number = "2015550123", Message = "m" });
         Roundtrip(new MessageRecord { Id = "i", Key = new(), Value = new() });
         Roundtrip(new MessageHistoryData { Number = "n", Type = "sms", FromTs = 1, ToTs = 2, Messages = new() });
         Roundtrip(new MessageSendData { Id = "i", Type = "sms", FromNumber = "f", ToNumber = "t", Parts = 1, Subject = "s", MediaUrls = new() { "u" } });
@@ -221,7 +227,6 @@ public class ModelCoverageTests
         Roundtrip(new NumberCampaignAssignRequest { CampaignId = "c" });
         Roundtrip(new NumberMoveRequest { AccountId = 1, Route = 4 });
         Roundtrip(new PortOutPinUpdateRequest { Pin = "1234" });
-        Roundtrip(new BulkUnassignRequest { Numbers = new() { "n" } });
         Roundtrip(new NumberDetail { Number = "n", Translated = "t", Route = 4, Gateway = "g", Cnam = true, Forward = true, ForwardTo = "f", Carrier = 1, SmsEnabled = true, FaxEnabled = true });
         Roundtrip(new CampaignBinding { Id = "i", Network = "A", Status = "ACTIVE", UpstreamCnpId = "u" });
         Roundtrip(new MessagingEnablementJob { CampaignId = "CAMP002", State = "routing", Message = "m", CreatedAt = "c", UpdatedAt = "u" });
@@ -314,7 +319,7 @@ public class ModelCoverageTests
             Embedded = new(),
         });
         Roundtrip(new TicketData { Ticket = new() });
-        Roundtrip(new TicketsListData());
+        Roundtrip(new TicketsListData { TotalCount = 1 });
         Roundtrip(new TicketThreadsData());
         Roundtrip(new TicketReplyData { Message = "Reply added" });
         Roundtrip(new TicketUpdateData { Id = 1, Status = "success" });

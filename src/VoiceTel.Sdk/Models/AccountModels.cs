@@ -124,16 +124,17 @@ public sealed class AccountRegistrationData
 {
     [JsonPropertyName("agent")] public string? Agent { get; set; }
     [JsonPropertyName("uri")] public string? Uri { get; set; }
-    [JsonPropertyName("expires")] public int Expires { get; set; }
 }
 
 /// <summary>Body for <c>POST /v2.2/account</c> (admin-only sub-account creation).</summary>
 public sealed class AccountAddRequest
 {
-    [JsonPropertyName("username")] public int Username { get; set; }
+    /// <summary>10-digit numeric username.</summary>
+    [JsonPropertyName("username")] public string Username { get; set; } = string.Empty;
     [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
     [JsonPropertyName("email")] public string Email { get; set; } = string.Empty;
-    [JsonPropertyName("masterAccount")] public int? MasterAccount { get; set; }
+    /// <summary>Billing account. Defaults to <see cref="Username"/>.</summary>
+    [JsonPropertyName("masterAccount")] public string? MasterAccount { get; set; }
 }
 
 /// <summary>Response data for <c>POST /v2.2/account</c>.</summary>

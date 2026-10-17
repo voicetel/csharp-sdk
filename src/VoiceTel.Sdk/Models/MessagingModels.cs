@@ -48,7 +48,8 @@ public sealed class MessageRecordValue
     [JsonPropertyName("destinationNumber")] public string? DestinationNumber { get; set; }
     [JsonPropertyName("direction")] public string? Direction { get; set; }
     [JsonPropertyName("rate")] public string? Rate { get; set; }
-    [JsonPropertyName("number")] public int Number { get; set; }
+    /// <summary>Far-end number (sms/mms only).</summary>
+    [JsonPropertyName("number")] public string? Number { get; set; }
     [JsonPropertyName("message")] public string? Message { get; set; }
 }
 
@@ -163,11 +164,15 @@ public sealed class MessagingCampaignStatusData
     [JsonPropertyName("campaigns")] public List<CampaignStatusItem> Campaigns { get; set; } = new();
 }
 
-/// <summary>Optional query filters for <c>History</c>.</summary>
+/// <summary>Query filters for <c>HistoryAsync</c>. <see cref="Number"/> is required.</summary>
 public sealed class HistoryOptions
 {
-    public string? Number { get; set; }
-    public int Start { get; set; }
-    public int End { get; set; }
+    /// <summary>Required. Ten-digit telephone number on the authenticated account.</summary>
+    public string Number { get; set; } = string.Empty;
+    /// <summary>Unix timestamp range start (newer). Defaults to now.</summary>
+    public long? From { get; set; }
+    /// <summary>Unix timestamp range end (older). Defaults to 24h ago.</summary>
+    public long? To { get; set; }
+    /// <summary><c>sms</c> (default), <c>mms</c>, or <c>dlr</c> (delivery status events for sent messages).</summary>
     public string? Type { get; set; }
 }

@@ -200,6 +200,8 @@ public sealed class TicketData
 /// <summary>Response data for <c>GET /v2.2/support/tickets</c>.</summary>
 public sealed class TicketsListData
 {
+    /// <summary>Total tickets matching the filter.</summary>
+    [JsonPropertyName("totalCount")] public int? TotalCount { get; set; }
     [JsonPropertyName("tickets")] public List<SupportConversation> Tickets { get; set; } = new();
 }
 

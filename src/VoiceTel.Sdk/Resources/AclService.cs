@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,12 @@ public sealed class AclService
     public Task<AclAddData> AddAsync(AclModifyRequest body, CancellationToken cancellationToken = default) =>
         _t.RequestAsync<AclAddData>(HttpMethod.Post, "/v2.2/acl", null, body, requireAuth: true, cancellationToken);
 
-    /// <summary>Removes one or more CIDR entries from the allowlist (returns 200 with body).</summary>
-    public Task<AclRemoveData> RemoveAsync(AclModifyRequest body, CancellationToken cancellationToken = default) =>
-        _t.RequestAsync<AclRemoveData>(HttpMethod.Delete, "/v2.2/acl", null, body, requireAuth: true, cancellationToken);
+    /// <summary>Removes one or more CIDR entries from the allowlist (returns 200 with body).
+    /// The entries are sent as the required <c>cidrs</c> query parameter (comma-separated).</summary>
+    public Task<AclRemoveData> RemoveAsync(IEnumerable<string> cidrs, CancellationToken cancellationToken = default)
+    {
+        var q = new QueryBuilder();
+        q.Add("cidrs", string.Join(",", cidrs));
+        return _t.RequestAsync<AclRemoveData>(HttpMethod.Delete, "/v2.2/acl", q.HasAny ? q.ToString() : null, null, requireAuth: true, cancellationToken);
+    }
 }

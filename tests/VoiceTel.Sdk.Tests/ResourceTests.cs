@@ -35,11 +35,12 @@ public class ResourceTests
         var u = await c.Account.UpdateAsync(new AccountPutRequest { Timezone = "UTC" });
         Assert.Contains("timezone", u.Updated);
 
-        var a = await c.Account.AddAsync(new AccountAddRequest { Username = 1, Name = "n", Email = "e" });
+        var a = await c.Account.AddAsync(new AccountAddRequest { Username = "1000000002", Name = "n", Email = "e" });
         Assert.Equal("new", a.Username);
 
         var s = await c.Account.SignupAsync(new AccountSignupRequest { Name = "n", Email = "e" });
         Assert.Equal("public", s.Username);
+        Assert.Null(h.Captured[2].Request.Headers.Authorization); // signup is public
     }
 
     [Fact]
@@ -53,7 +54,7 @@ public class ResourceTests
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/account/registration", "{\"agent\":\"a\"}");
 
         Assert.Single((await c.Account.CdrAsync(0, 0)).Cdr);
-        Assert.Single((await c.Account.CreditsAsync()).Credits);
+        Assert.Single((await c.Account.CreditsAsync("paid")).Credits);
         Assert.Equal(1.0, (await c.Account.RecurringChargesAsync()).Total);
         Assert.Equal("Completed", (await c.Account.PaymentsAsync()).Payments[0].Status);
         Assert.Equal("a", (await c.Account.RegistrationAsync()).Agent);
@@ -83,7 +84,10 @@ public class ResourceTests
         var body = new AclModifyRequest { Acl = new List<CidrEntry> { new() { Cidr = "1.1.1.1/32" } } };
         Assert.Single((await c.Acl.ListAsync()).Acl);
         Assert.Single((await c.Acl.AddAsync(body)).Added);
-        Assert.Single((await c.Acl.RemoveAsync(body)).Removed);
+        Assert.Single((await c.Acl.RemoveAsync(new[] { "1.1.1.1/32" })).Removed);
+        var removeUri = h.Captured[2].Request.RequestUri!.ToString();
+        Assert.Contains("cidrs=1.1.1.1%2F32", removeUri);
+        Assert.Equal(string.Empty, h.Captured[2].Body); // remove takes no body
     }
 
     [Fact]
@@ -170,16 +174,25 @@ public class ResourceTests
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/orders",
             "{\"orderId\":\"o\",\"amountCharged\":1.0,\"numbersOrdered\":[\"2015550123\"]}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/ports", "{\"ports\":[{\"status\":\"new\"}]}");
-        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/ports/42", "{\"port\":{\"status\":\"done\"}}");
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/ports/y0d36", "{\"port\":{\"status\":\"done\"}}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/ports",
             "{\"pid\":\"ABCDE\",\"ticket\":1,\"message\":\"ok\",\"loaUrl\":\"u\",\"portUrl\":\"v\"}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/ports/availability/2015550123",
             "{\"number\":\"2015550123\",\"portable\":true,\"losingCarrier\":\"X\",\"localRoutingNumber\":\"2015550000\",\"rateCenterTier\":\"A\",\"reason\":null}");
 
-        var inv = await c.INumbering.SearchInventoryAsync(new InventoryQuery { State = "NJ", Limit = 5, Npa = 201, Nxx = 555, Contains = "55", EndsWith = "34", RateCenter = "NWRK" });
+        var inv = await c.INumbering.SearchInventoryAsync(new InventoryQuery { TnMask = "201555*", Quantity = 5, Province = "NJ", RateCenter = "NWRK", Lata = "224" });
         Assert.Single(inv.Numbers);
-        var cov = await c.INumbering.CoverageAsync(new CoverageQuery { State = "NJ", RateCenter = "NWRK" });
+        var invUri = h.Captured[0].Request.RequestUri!.ToString();
+        Assert.Contains("tnMask=201555%2A", invUri);
+        Assert.Contains("quantity=5", invUri);
+        Assert.Contains("province=NJ", invUri);
+        Assert.Contains("rateCenter=NWRK", invUri);
+        Assert.Contains("lata=224", invUri);
+        var cov = await c.INumbering.CoverageAsync(new CoverageQuery { CountBy = CoverageCountBy.State, LocState = "NJ" });
         Assert.Single(cov.Coverage);
+        var covUri = h.Captured[1].Request.RequestUri!.ToString();
+        Assert.Contains("countBy=state", covUri);
+        Assert.Contains("locState=NJ", covUri);
         var ord = await c.INumbering.OrderAsync(new OrderCreateRequest
         {
             Numbers = new List<OrderNumber> {
@@ -189,7 +202,7 @@ public class ResourceTests
         });
         Assert.Equal("o", ord.OrderId);
         await c.INumbering.PortsAsync();
-        await c.INumbering.PortAsync(42);
+        await c.INumbering.PortAsync("y0d36");
         var p = await c.INumbering.SubmitPortAsync(new PortSubmitRequest
         {
             Did = new List<string> { "2015550123" },
@@ -276,7 +289,12 @@ public class ResourceTests
             "{\"result\":{\"statusCode\":\"200\",\"status\":\"Success\"}}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/messaging", "{\"numbers\":[]}");
 
-        await c.Messaging.HistoryAsync(new HistoryOptions { Number = "2015550123", Start = 1, End = 2, Type = "sms" });
+        await c.Messaging.HistoryAsync(new HistoryOptions { Number = "2015550123", From = 1, To = 2, Type = "sms" });
+        var histUri = h.Captured[0].Request.RequestUri!.ToString();
+        Assert.Contains("number=2015550123", histUri);
+        Assert.Contains("from=1", histUri);
+        Assert.Contains("to=2", histUri);
+        Assert.Contains("type=sms", histUri);
         var s = await c.Messaging.SendAsync(new MessageSendRequest { FromNumber = "a", ToNumber = "b", Text = "hi" });
         Assert.Equal("i", s.Id);
 
@@ -286,20 +304,21 @@ public class ResourceTests
         Assert.Contains("\"toNumber\":\"b\"", sendBody);
 
         await c.Messaging.CreateBrandAsync(new MessagingBrandCreateRequest { MessagingBrandId = "Bx", MessagingBrandName = "n" });
-        var cs = await c.Messaging.CampaignStatusAsync();
+        var cs = await c.Messaging.CampaignStatusAsync(new[] { "CAMP002" });
         Assert.Equal("CAMPAIGN_PENDING_DCA", cs.Campaigns[0].Status);
         Assert.False(cs.Campaigns[0].Dca!.ElectionComplete);
+        Assert.Contains("ids=CAMP002", h.Captured[3].Request.RequestUri!.ToString());
         await c.Messaging.CreateCampaignAsync(new MessagingCampaignCreateRequest { MessagingBrandId = "Bx", ExternalCampaignId = "e", CampaignDescription = "d" });
         await c.Messaging.NumbersStateAsync(new[] { "2015550123", "2015551235" });
     }
 
     [Fact]
-    public async Task Messaging_NumbersState_NoNumbers_SkipsQuery()
+    public async Task Messaging_NumbersState_SendsRequiredNumbersQuery()
     {
         var (c, h) = TestFactory.NewClient();
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/messaging", "{\"numbers\":[]}");
-        await c.Messaging.NumbersStateAsync();
-        Assert.DoesNotContain("?", h.Captured[0].Request.RequestUri!.ToString());
+        await c.Messaging.NumbersStateAsync(new[] { "2015550123" });
+        Assert.Contains("numbers=2015550123", h.Captured[0].Request.RequestUri!.ToString());
     }
 
     [Fact]
@@ -426,10 +445,15 @@ public class ResourceTests
         Assert.Equal("B", ac.Network);
         Assert.False(ac.AlreadyAssigned);
         Assert.Equal("987654", ((System.Text.Json.JsonElement)ac.OrderId!).GetString());
-        var uc = await c.Numbers.UnassignCampaignAsync("n");
+        var uc = await c.Numbers.UnassignCampaignAsync("n", "c");
         Assert.True(uc.Unassigned);
-        var bulk = await c.Numbers.BulkUnassignCampaignAsync(new[] { "n" });
+        Assert.Contains("campaignId=c", h.Captured[3].Request.RequestUri!.ToString());
+        var bulk = await c.Numbers.BulkUnassignCampaignAsync(new[] { "n" }, "c");
         Assert.Single(bulk.UnassignedNumbers);
+        var bulkUri = h.Captured[4].Request.RequestUri!.ToString();
+        Assert.Contains("numbers=n", bulkUri);
+        Assert.Contains("campaignId=c", bulkUri);
+        Assert.Equal(string.Empty, h.Captured[4].Body); // bulk unassign takes no body
         var pin = await c.Numbers.SetPortOutPinAsync("n", new PortOutPinUpdateRequest { Pin = "1234" });
         Assert.Equal("1234", pin.PortOutPin);
         Assert.True(pin.Changed);
@@ -442,7 +466,7 @@ public class ResourceTests
     {
         var (c, h) = TestFactory.NewClient();
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/support/tickets",
-            "{\"tickets\":[{\"id\":1,\"number\":1015,\"status\":\"active\"}]}");
+            "{\"totalCount\":1,\"tickets\":[{\"id\":1,\"number\":1015,\"status\":\"active\"}]}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/support/tickets",
             "{\"ticket\":{\"id\":2,\"number\":1016,\"status\":\"active\",\"subject\":\"s\"}}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/support/tickets/2",
@@ -456,6 +480,7 @@ public class ResourceTests
             "{\"message\":\"Reply added\"}");
 
         var list = await c.Support.ListAsync();
+        Assert.Equal((int?)1, list.TotalCount);
         Assert.Equal(1015, list.Tickets[0].TicketNumber); // sequence number, NOT a phone number
         var created = await c.Support.CreateAsync(new TicketCreateRequest { Subject = "s", Message = "m" });
         Assert.Equal(1016, created.Ticket.TicketNumber);

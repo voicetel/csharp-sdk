@@ -20,13 +20,15 @@ internal sealed class QueryBuilder
         _pairs.Add((key, value!));
     }
 
-    public void AddInt(string key, int value)
+    /// <summary>Adds an integer-valued pair. <c>null</c> is skipped; zero is a
+    /// legitimate value and is emitted.</summary>
+    public void AddInt(string key, long? value)
     {
-        if (value == 0)
+        if (!value.HasValue)
         {
             return;
         }
-        _pairs.Add((key, value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        _pairs.Add((key, value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
     }
 
     public bool HasAny => _pairs.Count > 0;

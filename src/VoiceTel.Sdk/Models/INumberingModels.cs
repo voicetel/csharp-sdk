@@ -236,21 +236,49 @@ public sealed class PortAvailabilityData
     [JsonPropertyName("reason")] public string? Reason { get; set; }
 }
 
+/// <summary>Aggregation dimensions for <see cref="CoverageQuery.CountBy"/>.</summary>
+public static class CoverageCountBy
+{
+    /// <summary>Aggregate by state/province.</summary>
+    public const string State = "state";
+    /// <summary>Aggregate by city.</summary>
+    public const string City = "city";
+    /// <summary>Aggregate by rate center.</summary>
+    public const string RateCenter = "rateCenter";
+    /// <summary>Aggregate by NPA/NXX.</summary>
+    public const string NpaNxx = "npanxx";
+    /// <summary>Aggregate by thousand-block.</summary>
+    public const string Block = "block";
+}
+
 /// <summary>Query filters for <c>SearchInventoryAsync</c>.</summary>
 public sealed class InventoryQuery
 {
-    public int Npa { get; set; }
-    public int Nxx { get; set; }
-    public string? State { get; set; }
+    /// <summary>Required. Prefix or wildcard pattern: <c>201</c>, <c>201555</c>, <c>201555*</c>.</summary>
+    public string TnMask { get; set; } = string.Empty;
+    /// <summary>Maximum results, 1–1000. Defaults to 10 server-side.</summary>
+    public int? Quantity { get; set; }
+    /// <summary>Limit results to this 2-letter US state or Canadian province code.</summary>
+    public string? Province { get; set; }
+    /// <summary>Rate-center name.</summary>
     public string? RateCenter { get; set; }
-    public string? Contains { get; set; }
-    public string? EndsWith { get; set; }
-    public int Limit { get; set; }
+    /// <summary>LATA code.</summary>
+    public string? Lata { get; set; }
 }
 
 /// <summary>Query filters for <c>CoverageAsync</c>.</summary>
 public sealed class CoverageQuery
 {
-    public string? State { get; set; }
-    public string? RateCenter { get; set; }
+    /// <summary>Required. Aggregation dimension — one of <see cref="CoverageCountBy"/>.</summary>
+    public string CountBy { get; set; } = string.Empty;
+    /// <summary>Filter: state or province code (e.g. NJ).</summary>
+    public string? LocState { get; set; }
+    /// <summary>Filter: city name.</summary>
+    public string? City { get; set; }
+    /// <summary>Filter: rate-center abbreviation.</summary>
+    public string? RcAbbre { get; set; }
+    /// <summary>Filter: area code.</summary>
+    public string? Npa { get; set; }
+    /// <summary>Filter: LATA code.</summary>
+    public string? Lata { get; set; }
 }

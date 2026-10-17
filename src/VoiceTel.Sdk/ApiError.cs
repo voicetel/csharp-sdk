@@ -26,7 +26,8 @@ public enum ErrorKind
     /// <summary>HTTP 409 — request conflicts with current state.</summary>
     Conflict,
 
-    /// <summary>HTTP 429 — exceeded the 6/hour/IP cap on account/* endpoints.</summary>
+    /// <summary>HTTP 429 — exceeded a rate limit (e.g. the 6/hour/IP cap on the
+    /// rate-limited account endpoints, or the 30/hour health-check cap).</summary>
     RateLimit,
 
     /// <summary>Any HTTP 5xx response.</summary>
@@ -46,8 +47,9 @@ public sealed class ApiError : Exception
     /// <summary>HTTP status code; 0 when the failure was transport-level.</summary>
     public int StatusCode { get; }
 
-    /// <summary>Server-supplied error code (when present in the response body).</summary>
-    public string? Code { get; }
+    /// <summary>Server-supplied numeric error code, from the
+    /// <c>{"status":"error","error":{"code":…,"message":…}}</c> envelope (when present).</summary>
+    public long? Code { get; }
 
     /// <summary>
     /// The raw response body as a string, or the parsed object when the body
@@ -60,7 +62,7 @@ public sealed class ApiError : Exception
         ErrorKind kind,
         int statusCode,
         string message,
-        string? code = null,
+        long? code = null,
         object? body = null,
         Exception? innerException = null)
         : base(message, innerException)
@@ -95,6 +97,6 @@ public sealed class ApiError : Exception
         _ => ErrorKind.Unknown,
     };
 
-    internal static ApiError FromStatus(int status, string? code, string message, object? body) =>
+    internal static ApiError FromStatus(int status, long? code, string message, object? body) =>
         new(KindFromStatus(status), status, message, code, body);
 }
