@@ -125,7 +125,7 @@ public class ResourceTests
         var (c, h) = TestFactory.NewClient();
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/e911", "{\"records\":[{\"dn\":\"1X\"}]}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/e911", "{\"record\":{\"dn\":\"1X\"}}");
-        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/e911/validations", "{\"address\":{\"addressid\":7,\"address1\":\"a\",\"city\":\"c\",\"state\":\"NJ\",\"zip\":\"01\"}}");
+        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/e911/validations", "{\"address\":{\"addressid\":\"123a45b678c9d012e3f45a67b890c123\",\"address1\":\"a\",\"city\":\"c\",\"state\":\"NJ\",\"zip\":\"01\"}}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/e911/1234567890", "{\"record\":{\"dn\":\"11234567890\"}}");
         h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/e911/1234567890", "{\"record\":{\"dn\":\"11234567890\"}}");
         h.EnqueueNoContent(HttpMethod.Delete, "/v2.2/e911/1234567890");
@@ -133,10 +133,28 @@ public class ResourceTests
         Assert.Single((await c.E911.ListAsync()).Records);
         await c.E911.CreateAsync(new E911CreateRequest { Dn = "1234567890", Callername = "Test", Address1 = "a", City = "c", State = "NJ", Zip = "01" });
         var v = await c.E911.ValidateAsync(new E911AddressRequest { Address1 = "a", City = "c", State = "NJ", Zip = "01" });
-        Assert.Equal(7, v.Address.AddressId);
+        Assert.Equal("123a45b678c9d012e3f45a67b890c123", v.Address.AddressId);
         await c.E911.GetAsync("1234567890");
-        await c.E911.ProvisionAsync("1234567890", new E911ProvisionByIdRequest { Callername = "Test", AddressId = 7 });
+        await c.E911.ProvisionAsync("1234567890", new E911ProvisionByIdRequest { Callername = "Test", AddressId = v.Address.AddressId });
         await c.E911.RemoveAsync("1234567890");
+    }
+
+    [Fact]
+    public async Task E911_AddressId_RoundTripsAsString()
+    {
+        // v2.2.18+: addressid is a hex string on the wire, both directions.
+        var (c, h) = TestFactory.NewClient();
+        const string id = "123a45b678c9d012e3f45a67b890c123";
+        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/e911/validations",
+            "{\"address\":{\"addressid\":\"" + id + "\",\"address1\":\"a\",\"city\":\"c\",\"state\":\"NJ\",\"zip\":\"01\"}}");
+        h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/e911/1234567890", "{\"record\":{\"dn\":\"11234567890\"}}");
+
+        var v = await c.E911.ValidateAsync(new E911AddressRequest { Address1 = "a", City = "c", State = "NJ", Zip = "01" });
+        Assert.Equal(id, v.Address.AddressId);
+        await c.E911.ProvisionAsync("1234567890", new E911ProvisionByIdRequest { Callername = "Test", AddressId = v.Address.AddressId });
+
+        var body = h.Captured[1].Body;
+        Assert.Contains("\"addressid\":\"" + id + "\"", body); // JSON string, not a number
     }
 
     // -------------------------------------------------------------- Gateways ---
@@ -172,7 +190,7 @@ public class ResourceTests
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/inventory/coverage",
             "{\"coverage\":[{\"count\":10,\"npa\":\"201\"}]}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/orders",
-            "{\"orderId\":\"o\",\"amountCharged\":1.0,\"numbersOrdered\":[\"2015550123\"]}");
+            "{\"orderId\":\"o\",\"amountCharged\":1.0,\"numbersOrdered\":[\"2015550123\"],\"routes\":[{\"number\":\"2015550123\",\"route\":4}]}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/ports", "{\"ports\":[{\"status\":\"new\"}]}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/ports/y0d36", "{\"port\":{\"status\":\"done\"}}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/ports",
@@ -201,6 +219,9 @@ public class ResourceTests
             },
         });
         Assert.Equal("o", ord.OrderId);
+        Assert.Single(ord.Routes);
+        Assert.Equal("2015550123", ord.Routes[0].Number);
+        Assert.Equal(4, ord.Routes[0].Route);
         await c.INumbering.PortsAsync();
         await c.INumbering.PortAsync("y0d36");
         var p = await c.INumbering.SubmitPortAsync(new PortSubmitRequest
@@ -270,6 +291,33 @@ public class ResourceTests
         Assert.Equal("L", ln.Lrn.Lrn);
     }
 
+    [Fact]
+    public async Task Lookups_Carrier_DecodesUpstreamSnakeCaseFields()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/carrier/2015550123",
+            "{\"number\":\"2015550123\",\"carrier\":{\"name\":\"EXAMPLE CARRIER\",\"type\":\"voip\"," +
+            "\"mobile_country_code\":null,\"mobile_network_code\":null,\"error_code\":null}}");
+        var d = await c.Lookups.CarrierAsync("2015550123");
+        Assert.Equal("2015550123", d.Number);
+        Assert.Equal("EXAMPLE CARRIER", d.Carrier!.Name);
+        Assert.Equal("voip", d.Carrier.Type);
+        Assert.Null(d.Carrier.MobileCountryCode);
+        Assert.Null(d.Carrier.MobileNetworkCode);
+        Assert.Null(d.Carrier.ErrorCode);
+        Assert.Equal("/v2.2/carrier/2015550123", h.Captured[0].Request.RequestUri!.AbsolutePath);
+
+        // mobile numbers carry mcc/mnc; a lookup that could not be resolved carries error_code
+        var (c2, h2) = TestFactory.NewClient();
+        h2.EnqueueEnvelope(HttpMethod.Get, "/v2.2/carrier/2015550123",
+            "{\"number\":\"2015550123\",\"carrier\":{\"name\":\"MOBILE CARRIER\",\"type\":\"mobile\"," +
+            "\"mobile_country_code\":\"310\",\"mobile_network_code\":\"456\",\"error_code\":0}}");
+        var d2 = await c2.Lookups.CarrierAsync("2015550123");
+        Assert.Equal("310", d2.Carrier!.MobileCountryCode);
+        Assert.Equal("456", d2.Carrier.MobileNetworkCode);
+        Assert.Equal(0, d2.Carrier.ErrorCode);
+    }
+
     // --------------------------------------------------------------- Messaging ---
 
     [Fact]
@@ -319,6 +367,53 @@ public class ResourceTests
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/messaging", "{\"numbers\":[]}");
         await c.Messaging.NumbersStateAsync(new[] { "2015550123" });
         Assert.Contains("numbers=2015550123", h.Captured[0].Request.RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task Messaging_Send_MediaOnlyMms_OmitsText()
+    {
+        // v2.2.18+: text is optional — a media-only MMS sends no text on the wire.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/messages",
+            "{\"id\":\"i\",\"type\":\"mms\",\"fromNumber\":\"2015550100\",\"toNumber\":\"2015550123\",\"parts\":1," +
+            "\"mediaUrls\":[\"https://cdn.example.com/x.png\"]}");
+        var s = await c.Messaging.SendAsync(new MessageSendRequest
+        {
+            FromNumber = "2015550100",
+            ToNumber = "2015550123",
+            MediaUrls = new List<string> { "https://cdn.example.com/x.png" },
+        });
+        Assert.Equal("mms", s.Type);
+        var body = h.Captured[0].Body;
+        Assert.Contains("\"fromNumber\":\"2015550100\"", body);
+        Assert.Contains("\"mediaUrls\":[", body);
+        Assert.DoesNotContain("\"text\"", body);     // media-only MMS omits text
+        Assert.DoesNotContain("\"subject\"", body);  // unset deprecated subject is omitted
+    }
+
+    [Fact]
+    public async Task Messaging_History_DecodesNewRecordFields()
+    {
+        // v2.2.18+ record fields: dlr receipt detail, mms attachments/subject, outbound ip.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/messages",
+            "{\"number\":\"2015550100\",\"type\":\"dlr\",\"fromTs\":1,\"toTs\":2,\"messages\":[" +
+            "{\"id\":\"a\",\"key\":[\"x\"],\"value\":{\"sourceNumber\":\"12015550100\",\"destinationNumber\":\"12015550123\"," +
+            "\"messageText\":\"stat:DELIVRD err:000\",\"transactionGUID\":\"1793144711856jfw\",\"concatenatedMessage\":\"002\"}}," +
+            "{\"id\":\"b\",\"key\":[\"y\"],\"value\":{\"direction\":\"in\",\"number\":\"2015550123\",\"subject\":\"hi\"," +
+            "\"attachments\":[{\"contentFile\":\"https://example.com/f.png\",\"contentType\":\"image/png\"}]}}," +
+            "{\"id\":\"c\",\"key\":[\"z\"],\"value\":{\"direction\":\"out\",\"number\":\"2015550123\",\"message\":\"ok\",\"ip\":\"203.0.113.10\"}}]}");
+        var r = await c.Messaging.HistoryAsync(new HistoryOptions { Number = "2015550100", Type = "dlr" });
+        var dlr = r.Messages[0].Value;
+        Assert.Equal("stat:DELIVRD err:000", dlr.MessageText);
+        Assert.Equal("1793144711856jfw", dlr.TransactionGuid);
+        Assert.Equal("002", dlr.ConcatenatedMessage);
+        var mms = r.Messages[1].Value;
+        Assert.Equal("hi", mms.Subject);
+        var att = (JsonElement)mms.Attachments!;
+        Assert.Equal("https://example.com/f.png", att[0].GetProperty("contentFile").GetString());
+        var sms = r.Messages[2].Value;
+        Assert.Equal("203.0.113.10", sms.Ip);
     }
 
     [Fact]
@@ -412,6 +507,121 @@ public class ResourceTests
         await c.Numbers.GetSmsAsync("n");
         await c.Numbers.SetSmsAsync("n", new NumberSmsRequest { Type = "email", Resource = "e" });
         await c.Numbers.RemoveSmsAsync("n");
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Get()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"listed\",\"eligible\":true," +
+            "\"listing\":{\"type\":\"B\",\"name\":\"Acme Corp\",\"streetNumber\":\"100\",\"streetName\":\"Broadway\"," +
+            "\"streetType\":\"St\",\"streetSuffix\":\"\",\"location\":\"Suite 900\",\"city\":\"New York\"," +
+            "\"state\":\"NY\",\"zip\":\"10005\",\"complex\":false},\"pending\":null}");
+        var d = await c.Numbers.GetDirectoryListingAsync("2015550123");
+        Assert.Equal("listed", d.Status);
+        Assert.True(d.Eligible);
+        Assert.Equal("B", d.Listing!.Type);
+        Assert.Equal("Acme Corp", d.Listing.Name);
+        Assert.False(d.Listing.Complex!.Value);
+        Assert.Null(d.Pending);
+        Assert.Equal("/v2.2/numbers/2015550123/directory-listing", h.Captured[0].Request.RequestUri!.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Get_PendingAdd()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"pending\",\"eligible\":true,\"listing\":null," +
+            "\"pending\":{\"type\":\"R\",\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"city\":\"New York\",\"state\":\"NY\",\"zip\":\"10005\"}}");
+        var d = await c.Numbers.GetDirectoryListingAsync("2015550123");
+        Assert.Equal("pending", d.Status);
+        Assert.Null(d.Listing);
+        Assert.Equal("R", d.Pending!.Type);
+        Assert.Equal("Jane", d.Pending.FirstName);
+        Assert.Equal("Doe", d.Pending.LastName);
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Put_Business_Accepts202()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"pending\",\"orderId\":\"1026472\"," +
+            "\"listing\":{\"type\":\"business\",\"name\":\"Acme Corp\",\"city\":\"New York\",\"state\":\"NY\",\"zip\":\"10005\"}}",
+            HttpStatusCode.Accepted);
+        var d = await c.Numbers.SetDirectoryListingAsync("2015550123", new DirectoryListingRequest
+        {
+            Type = "business",
+            Name = "Acme Corp",
+            StreetNumber = "100",
+            StreetName = "Broadway",
+            StreetType = "St",
+            StreetSuffix = "NE",
+            Location = "Suite 900",
+            City = "New York",
+            State = "NY",
+            Zip = "10005",
+        });
+        Assert.Equal("pending", d.Status);
+        Assert.Equal("1026472", d.OrderId);
+        Assert.Equal("Acme Corp", d.Listing!.Name);
+        var body = h.Captured[0].Body;
+        Assert.Contains("\"type\":\"business\"", body);
+        Assert.Contains("\"name\":\"Acme Corp\"", body);
+        Assert.Contains("\"streetNumber\":\"100\"", body);
+        Assert.Contains("\"city\":\"New York\"", body);
+        Assert.Contains("\"state\":\"NY\"", body);
+        Assert.Contains("\"zip\":\"10005\"", body);
+        Assert.DoesNotContain("firstName", body);
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Put_Residence()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"pending\",\"orderId\":\"1026473\"," +
+            "\"listing\":{\"type\":\"residence\",\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"city\":\"New York\",\"state\":\"NY\",\"zip\":\"10005\"}}",
+            HttpStatusCode.Accepted);
+        var d = await c.Numbers.SetDirectoryListingAsync("2015550123", new DirectoryListingRequest
+        {
+            Type = "residence",
+            FirstName = "Jane",
+            LastName = "Doe",
+            City = "New York",
+            State = "NY",
+            Zip = "10005",
+        });
+        Assert.Equal("pending", d.Status);
+        var body = h.Captured[0].Body;
+        Assert.Contains("\"type\":\"residence\"", body);
+        Assert.Contains("\"firstName\":\"Jane\"", body);
+        Assert.Contains("\"lastName\":\"Doe\"", body);
+        Assert.DoesNotContain("\"name\"", body);
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Delete_Accepts202()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Delete, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"removing\",\"orderId\":\"1026473\"}",
+            HttpStatusCode.Accepted);
+        h.EnqueueEnvelope(HttpMethod.Delete, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"not_listed\"}",
+            HttpStatusCode.Accepted);
+
+        var d = await c.Numbers.RemoveDirectoryListingAsync("2015550123");
+        Assert.Equal("removing", d.Status);
+        Assert.Equal("1026473", d.OrderId);
+        Assert.Equal(string.Empty, h.Captured[0].Body); // delete takes no body
+
+        // cancelling a pending add reports not_listed with no orderId
+        var cancel = await c.Numbers.RemoveDirectoryListingAsync("2015550123");
+        Assert.Equal("not_listed", cancel.Status);
+        Assert.Null(cancel.OrderId);
     }
 
     [Fact]

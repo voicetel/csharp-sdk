@@ -43,7 +43,8 @@ public sealed class OrderNumber
 public sealed class OrderNumberSpec
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
-    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Route for numbers in this order.</summary>
+
+    /// <summary>Route for numbers in this order: a gateway id on this account (<c>GET /v2.2/gateways</c>) or a global route — 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. The API rejects an unknown route with 400.</summary>
     [JsonPropertyName("route")] public int? Route { get; set; }
 }
 
@@ -193,12 +194,25 @@ public sealed class OrderFailedEntry
     [JsonPropertyName("reason")] public string Reason { get; set; } = string.Empty;
 }
 
+/// <summary>One row in <see cref="OrderCreateData.Routes"/> — the route each ordered number was placed on.</summary>
+public sealed class OrderRoute
+{
+    [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
+
+    /// <summary>Gateway id or global route the number was placed on.</summary>
+    [JsonPropertyName("route")] public int Route { get; set; }
+}
+
 /// <summary>Response data for <c>POST /v2.2/orders</c>.</summary>
 public sealed class OrderCreateData
 {
     [JsonPropertyName("orderId")] public string OrderId { get; set; } = string.Empty;
     [JsonPropertyName("amountCharged")] public double AmountCharged { get; set; }
     [JsonPropertyName("numbersOrdered")] public List<string> NumbersOrdered { get; set; } = new();
+
+    /// <summary>The route each ordered number was placed on.</summary>
+    [JsonPropertyName("routes")] public List<OrderRoute> Routes { get; set; } = new();
+
     [JsonPropertyName("failed")] public List<OrderFailedEntry>? Failed { get; set; }
 }
 

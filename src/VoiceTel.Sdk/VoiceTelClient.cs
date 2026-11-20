@@ -70,7 +70,7 @@ public sealed class VoiceTelClient : IDisposable
     /// <summary>Inventory search, coverage queries, number orders, and port-ins.</summary>
     public INumberingService INumbering { get; }
 
-    /// <summary>CNAM and LRN dips.</summary>
+    /// <summary>CNAM, carrier &amp; line type, and LRN dips.</summary>
     public LookupsService Lookups { get; }
 
     /// <summary>SMS/MMS sending and 10DLC brand/campaign registration.</summary>

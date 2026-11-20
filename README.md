@@ -2,7 +2,7 @@
 
 The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api/v2.2/) — provision numbers, place orders, validate e911, send messages, and manage your account, all with strongly-typed, `async`/`await`-friendly C#.
 
-![Version](https://img.shields.io/badge/version-2.2.17-blue)
+![Version](https://img.shields.io/badge/version-2.2.20-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%20netstandard2.1-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
@@ -26,7 +26,7 @@ The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api
 ## ✨ Features
 
 ### 🛡️ Strongly Typed End-to-End
-- **Native C# classes** for every one of the 79 API operations — serialized with `System.Text.Json`, no reflection magic.
+- **Native C# classes** for every one of the 83 API operations — serialized with `System.Text.Json`, no reflection magic.
 - **Nullable reference types** throughout — distinguish "not set" from "empty" cleanly when PATCH-ing.
 - **Nullable response fields** — `ForwardTo` is `string?` so you can tell apart "no forward configured" from an empty destination.
 - **`CancellationToken` everywhere.** Every method takes a `CancellationToken` as the last argument; cancellation and timeouts propagate cleanly down to the HTTP layer.
@@ -39,12 +39,12 @@ The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api
 - **Structured `ApiError`** exception with typed `Kind` enum so you can `switch (ex.Kind) { case ErrorKind.RateLimit: ... }` without parsing HTTP status codes.
 
 ### 📞 Complete API Coverage
-- **Numbers** — list, get, add, remove, route, translate, CNAM, LIDB, fax, forward, SMS, messaging campaigns, port-out PIN, account moves.
+- **Numbers** — list, get, add, remove, route, translate, CNAM, LIDB, directory listing (411), fax, forward, SMS, messaging campaigns, port-out PIN, account moves.
 - **Account** — profile, sub-accounts, CDRs, credits, payments, MRC, registration, password recovery.
 - **e911** — record provisioning, address validation, lookup, removal.
 - **Gateways** — list, create, update, delete, view bound numbers.
 - **Messaging** — SMS & MMS sending, message history, 10DLC brand and campaign registration, per-number messaging state, and messaging health (account overview, per-number live check, spam-blocked samples, alert-email setting).
-- **Lookups** — CNAM and LRN dips.
+- **Lookups** — CNAM, carrier & line type, and LRN dips.
 - **iNumbering** — inventory search, coverage queries, number orders, port-in submissions, port-out availability (with v2.2.10 `localRoutingNumber` and `rateCenterTier` fields).
 - **Support** — ticket create / read / update / delete, threaded messages, replies.
 - **ACL** — IP allowlist management with structured 409 conflict bodies.
@@ -69,7 +69,7 @@ dotnet add package VoiceTel.Sdk
 Or `<PackageReference>` it directly:
 
 ```xml
-<PackageReference Include="VoiceTel.Sdk" Version="2.2.17" />
+<PackageReference Include="VoiceTel.Sdk" Version="2.2.20" />
 ```
 
 Targets **.NET 8.0** (preferred) and **.NET Standard 2.1**.
