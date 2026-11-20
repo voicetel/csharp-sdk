@@ -2,7 +2,7 @@
 
 The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api/v2.2/) — provision numbers, place orders, validate e911, send messages, and manage your account, all with strongly-typed, `async`/`await`-friendly C#.
 
-![Version](https://img.shields.io/badge/version-2.2.20-blue)
+![Version](https://img.shields.io/badge/version-2.2.21-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%20netstandard2.1-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
@@ -26,7 +26,7 @@ The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api
 ## ✨ Features
 
 ### 🛡️ Strongly Typed End-to-End
-- **Native C# classes** for every one of the 83 API operations — serialized with `System.Text.Json`, no reflection magic.
+- **Native C# classes** for every one of the 88 API operations — serialized with `System.Text.Json`, no reflection magic.
 - **Nullable reference types** throughout — distinguish "not set" from "empty" cleanly when PATCH-ing.
 - **Nullable response fields** — `ForwardTo` is `string?` so you can tell apart "no forward configured" from an empty destination.
 - **`CancellationToken` everywhere.** Every method takes a `CancellationToken` as the last argument; cancellation and timeouts propagate cleanly down to the HTTP layer.
@@ -42,6 +42,7 @@ The official C# client for the [VoiceTel REST API](https://voicetel.com/docs/api
 - **Numbers** — list, get, add, remove, route, translate, CNAM, LIDB, directory listing (411), fax, forward, SMS, messaging campaigns, port-out PIN, account moves.
 - **Account** — profile, sub-accounts, CDRs, credits, payments, MRC, registration, password recovery.
 - **e911** — record provisioning, address validation, lookup, removal.
+- **Fax** — send faxes from your fax-capable numbers (multipart upload, idempotent per Idempotency-Key), read history with cursor paging, and download the rendered PDF.
 - **Gateways** — list, create, update, delete, view bound numbers.
 - **Messaging** — SMS & MMS sending, message history, 10DLC brand and campaign registration, per-number messaging state, and messaging health (account overview, per-number live check, spam-blocked samples, alert-email setting).
 - **Lookups** — CNAM, carrier & line type, and LRN dips.
@@ -69,7 +70,7 @@ dotnet add package VoiceTel.Sdk
 Or `<PackageReference>` it directly:
 
 ```xml
-<PackageReference Include="VoiceTel.Sdk" Version="2.2.20" />
+<PackageReference Include="VoiceTel.Sdk" Version="2.2.21" />
 ```
 
 Targets **.NET 8.0** (preferred) and **.NET Standard 2.1**.
@@ -129,6 +130,7 @@ var key = await client.LoginAsync("1000000001", "hunter2");
 | ACL | `client.Acl` | `await client.Acl.AddAsync(new AclModifyRequest { ... })` |
 | Authentication | `client.Authentication` | `await client.Authentication.UpdateAsync(new AuthPutRequest { AuthType = AuthTypes.Lax })` |
 | e911 | `client.E911` | `await client.E911.ValidateAsync(new E911AddressRequest { ... })` |
+| Fax | `client.Fax` | `await client.Fax.SendAsync("2015550123", "2125550123", new[] { FaxDocument.Pdf("contract.pdf", pdfBytes) })` |
 | Gateways | `client.Gateways` | `await client.Gateways.ListAsync()` |
 | iNumbering | `client.INumbering` | `await client.INumbering.SearchInventoryAsync(new() { TnMask = "201" })` |
 | Lookups | `client.Lookups` | `await client.Lookups.LrnAsync("2015550123", "2015550100")` |
@@ -210,6 +212,8 @@ These endpoints are limited to **6 requests per hour per IP**:
 - `POST /v2.2/account/api-key` (`client.LoginAsync`)
 
 Additionally, `POST /v2.2/messaging/health/check` (`client.Messaging.HealthCheckAsync`) is limited to **30 checks per hour per account**.
+
+`POST /v2.2/faxes` (`client.Fax.SendAsync`) is limited to **10 sends per minute per account** and answers 429 with `Retry-After: 60`.
 
 The SDK automatically retries 429 responses with `Retry-After` honored, up to `maxRetries` (default 2). To bump it:
 

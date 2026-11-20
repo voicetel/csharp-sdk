@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.2.21 — 2026-11-20
+
+Spec v2.2.21 sync — full audit against the live server code, plus the new Fax API.
+
+### Breaking
+- **`Acl.RemoveAsync` now takes an `AclModifyRequest`** (the same `{acl: [{cidr}]}` body as `AddAsync`). The old `cidrs` query parameter is not read by the live API (v2.2.0 handler rewrite) — requests using it silently removed nothing.
+
+### Added
+- **Fax API** (`client.Fax`): `ListNumbersAsync()` (fax-capable numbers), `SendAsync(fromNumber, toNumber, documents, idempotencyKey)` (multipart, 201, queued; idempotent per Idempotency-Key — retry-safe across restarts), `HistoryAsync(new FaxHistoryOptions { ... })` (cursor paging, status filter), `GetAsync(id)` (job shape with timestamps, attempts, failureReason), `DownloadDocumentAsync(id)` (the PDF as raw bytes).
+- Transport: multipart request support, raw-bytes responses, and caller-supplied idempotency keys.
+
+### Fixed
+- Fax error envelopes carry an extra `serverTime` field — parsed tolerantly.
+
 ## 2.2.20 — 2026-11-20
 
 Spec v2.2.20 sync. Adds the four new operations and tracks the truth fixes from spec v2.2.18–v2.2.20.

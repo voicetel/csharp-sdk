@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using VoiceTel.Sdk.Models;
+using VoiceTel.Sdk.Resources;
 using Xunit;
 
 namespace VoiceTel.Sdk.Tests;
@@ -84,10 +85,26 @@ public class ResourceTests
         var body = new AclModifyRequest { Acl = new List<CidrEntry> { new() { Cidr = "1.1.1.1/32" } } };
         Assert.Single((await c.Acl.ListAsync()).Acl);
         Assert.Single((await c.Acl.AddAsync(body)).Added);
-        Assert.Single((await c.Acl.RemoveAsync(new[] { "1.1.1.1/32" })).Removed);
+        Assert.Single((await c.Acl.RemoveAsync(body)).Removed);
+        // remove now sends the same {acl: [...]} body as add — no cidrs query parameter
         var removeUri = h.Captured[2].Request.RequestUri!.ToString();
-        Assert.Contains("cidrs=1.1.1.1%2F32", removeUri);
-        Assert.Equal(string.Empty, h.Captured[2].Body); // remove takes no body
+        Assert.DoesNotContain("cidrs=", removeUri);
+        Assert.DoesNotContain("?", removeUri); // empty query string
+        Assert.Equal("{\"acl\":[{\"cidr\":\"1.1.1.1/32\"}]}", h.Captured[2].Body);
+    }
+
+    [Fact]
+    public async Task Acl_RemoveConflictBodyIsPreservedInError()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueJson(HttpMethod.Delete, "/v2.2/acl",
+            "{\"status\":\"error\",\"error\":{\"code\":409,\"message\":\"One or more ACL entries could not be removed\"}," +
+            "\"data\":{\"removed\":[{\"cidr\":\"203.0.113.0/24\"}],\"failed\":[{\"cidr\":\"203.0.113.9/32\",\"reason\":\"DB delete failed\"}]}}",
+            HttpStatusCode.Conflict);
+        var ex = await Assert.ThrowsAsync<ApiError>(() =>
+            c.Acl.RemoveAsync(new AclModifyRequest()));
+        Assert.Equal(ErrorKind.Conflict, ex.Kind);
+        Assert.NotNull(ex.Body);
     }
 
     [Fact]
@@ -155,6 +172,178 @@ public class ResourceTests
 
         var body = h.Captured[1].Body;
         Assert.Contains("\"addressid\":\"" + id + "\"", body); // JSON string, not a number
+    }
+
+    // ------------------------------------------------------------------ Fax ---
+
+    private const string FaxJobJson =
+        "{\"id\":\"9f8c2b41a\",\"fromNumber\":\"2015550123\",\"toNumber\":\"2125550123\"," +
+        "\"clientToken\":\"123e4567-e89b-12d3-a456-426614174000\",\"status\":\"sent\"," +
+        "\"submittedAt\":\"2026-11-20T15:04:05Z\",\"startedAt\":\"2026-11-20T15:04:41Z\"," +
+        "\"completedAt\":\"2026-11-20T15:05:19Z\",\"attempts\":1,\"failureReason\":null," +
+        "\"documents\":[{\"name\":\"contract.pdf\",\"size\":123456,\"contentType\":\"application/pdf\"}]," +
+        "\"documentAvailable\":true,\"documentName\":\"contract.pdf\",\"documentSize\":123456}";
+
+    [Fact]
+    public async Task Fax_ListNumbers_Decodes()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/fax",
+            "{\"numbers\":[{\"number\":\"2015550123\",\"destinationId\":7,\"email\":\"fax@example.com\"}]}");
+        var r = await c.Fax.ListNumbersAsync();
+        Assert.Single(r.Numbers);
+        Assert.Equal("2015550123", r.Numbers[0].Number);
+        Assert.Equal(7, r.Numbers[0].DestinationId);
+        Assert.Equal("fax@example.com", r.Numbers[0].Email);
+    }
+
+    [Fact]
+    public async Task Fax_Send_PostsMultipartWithUuidIdempotencyKey()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.Enqueue(new MockExchange
+        {
+            Method = HttpMethod.Post,
+            Path = "/v2.2/faxes",
+            Status = HttpStatusCode.Created,
+            ResponseBody = "{\"status\":\"success\",\"data\":{\"id\":\"9f8c2b41a\",\"fromNumber\":\"2015550123\"," +
+                "\"toNumber\":\"2125550123\",\"status\":\"queued\"," +
+                "\"documents\":[{\"name\":\"contract.pdf\",\"size\":123456,\"contentType\":\"application/pdf\"}]}}",
+        });
+
+        var r = await c.Fax.SendAsync("2015550123", "2125550123",
+            new[] { FaxDocument.Pdf("contract.pdf", System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 fake")) });
+        Assert.Equal("9f8c2b41a", r.Id);
+        Assert.Equal("queued", r.Status);
+        Assert.Equal(123456, r.Documents[0].Size);
+
+        var request = h.Captured[0].Request;
+        // Idempotency-Key is required on the wire and is a UUID
+        var key = Assert.Single(request.Headers.GetValues("Idempotency-Key"));
+        Assert.Matches(
+            @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            key);
+
+        // multipart with a boundary
+        var contentType = request.Content!.Headers.ContentType!.ToString();
+        Assert.StartsWith("multipart/form-data; boundary=", contentType);
+        var boundary = contentType["multipart/form-data; boundary=".Length..];
+        var body = h.Captured[0].Body;
+        Assert.Contains("--" + boundary + "\r\n", body);
+        Assert.Contains("Content-Disposition: form-data; name=\"fromNumber\"", body);
+        Assert.Contains("2015550123", body);
+        Assert.Contains("Content-Disposition: form-data; name=\"toNumber\"", body);
+        Assert.Contains("2125550123", body);
+        Assert.Contains("Content-Disposition: form-data; name=\"documents\"; filename=\"contract.pdf\"", body);
+        Assert.Contains("Content-Type: application/pdf", body);
+        Assert.Contains("%PDF-1.4 fake", body);
+        Assert.EndsWith("--" + boundary + "--\r\n", body);
+    }
+
+    [Fact]
+    public async Task Fax_Send_HonorsCallerSuppliedIdempotencyKey()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.Enqueue(new MockExchange
+        {
+            Method = HttpMethod.Post,
+            Path = "/v2.2/faxes",
+            Status = HttpStatusCode.Created,
+            ResponseBody = "{\"status\":\"success\",\"data\":{\"id\":\"x\",\"fromNumber\":\"2015550123\"," +
+                "\"toNumber\":\"2125550123\",\"status\":\"queued\",\"documents\":[]}}",
+        });
+
+        await c.Fax.SendAsync("2015550123", "2125550123",
+            new[] { new FaxDocument("a.pdf", new byte[] { 0x25, 0x50, 0x44, 0x46 }) },
+            idempotencyKey: "123e4567-e89b-12d3-a456-426614174000");
+
+        var request = h.Captured[0].Request;
+        Assert.Equal("123e4567-e89b-12d3-a456-426614174000",
+            Assert.Single(request.Headers.GetValues("Idempotency-Key")));
+    }
+
+    [Fact]
+    public async Task Fax_History_SendsExactQueryParams()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/faxes",
+            "{\"number\":\"2015550123\",\"fromTs\":1795100000,\"toTs\":1795013600,\"faxes\":[" + FaxJobJson + "],\"nextCursor\":null}");
+        var r = await c.Fax.HistoryAsync(new FaxHistoryOptions
+        {
+            Number = "2015550123",
+            From = 1795100000,
+            To = 1795013600,
+            Limit = 50,
+            Status = "all",
+        });
+        Assert.Equal("2015550123", r.Number);
+        Assert.Single(r.Faxes);
+        Assert.Equal("sent", r.Faxes[0].Status);
+        Assert.Equal(1, r.Faxes[0].Attempts);
+        Assert.Equal(123456, r.Faxes[0].Documents[0].Size);
+        Assert.True(r.Faxes[0].DocumentAvailable);
+        Assert.Null(r.NextCursor);
+
+        var query = h.Captured[0].Request.RequestUri!.Query;
+        Assert.Contains("number=2015550123", query);
+        Assert.Contains("from=1795100000", query);
+        Assert.Contains("to=1795013600", query);
+        Assert.Contains("limit=50", query);
+        Assert.Contains("status=all", query);
+    }
+
+    [Fact]
+    public async Task Fax_History_PassesPagingCursor()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/faxes",
+            "{\"number\":\"2015550123\",\"fromTs\":1795100000,\"toTs\":1795013600,\"faxes\":[],\"nextCursor\":\"next\"}");
+        var r = await c.Fax.HistoryAsync(new FaxHistoryOptions { Number = "2015550123", Cursor = "cGl0LnN0b3Jl.8b1c" });
+        Assert.Equal("next", r.NextCursor);
+        Assert.Contains("cursor=cGl0LnN0b3Jl.8b1c", h.Captured[0].Request.RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task Fax_Get_DecodesJob()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/faxes/9f8c2b41a", FaxJobJson);
+        var job = await c.Fax.GetAsync("9f8c2b41a");
+        Assert.Equal("9f8c2b41a", job.Id);
+        Assert.Equal("123e4567-e89b-12d3-a456-426614174000", job.ClientToken);
+        Assert.Equal("2026-11-20T15:04:05Z", job.SubmittedAt);
+        Assert.Null(job.FailureReason);
+        Assert.Equal("contract.pdf", job.DocumentName);
+    }
+
+    [Fact]
+    public async Task Fax_DownloadDocument_ReturnsRawBytes()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.Enqueue(new MockExchange
+        {
+            Method = HttpMethod.Get,
+            Path = "/v2.2/faxes/9f8c2b41a/document",
+            ResponseBytes = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 binary-bytes"),
+        });
+
+        var data = await c.Fax.DownloadDocumentAsync("9f8c2b41a");
+
+        // Raw bytes, no envelope parsing.
+        Assert.Equal("%PDF-1.4 binary-bytes", System.Text.Encoding.ASCII.GetString(data));
+    }
+
+    [Fact]
+    public async Task Fax_ErrorEnvelope_ToleratesServerTimeField()
+    {
+        // Fax errors add serverTime beside the standard envelope — parse tolerantly.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueJson(HttpMethod.Get, "/v2.2/faxes/deadbeef",
+            "{\"status\":\"error\",\"error\":{\"code\":404,\"message\":\"Not found\"},\"serverTime\":1795100000}",
+            HttpStatusCode.NotFound);
+        var ex = await Assert.ThrowsAsync<ApiError>(() => c.Fax.GetAsync("deadbeef"));
+        Assert.Equal(ErrorKind.NotFound, ex.Kind);
+        Assert.Equal("Not found", ex.Message);
     }
 
     // -------------------------------------------------------------- Gateways ---

@@ -19,6 +19,10 @@ internal sealed class MockExchange
     public required string Path { get; init; }
     public HttpStatusCode Status { get; init; } = HttpStatusCode.OK;
     public string? ResponseBody { get; init; }
+    /// <summary>Raw binary response body (e.g. a PDF download). Takes precedence over <see cref="ResponseBody"/>.</summary>
+    public byte[]? ResponseBytes { get; init; }
+    /// <summary>Content-Type for the binary body.</summary>
+    public string ResponseBytesContentType { get; init; } = "application/pdf";
     public Dictionary<string, string>? ResponseHeaders { get; init; }
 }
 
@@ -82,7 +86,13 @@ internal sealed class MockHttpHandler : HttpMessageHandler
         Captured.Add((request, body));
 
         var response = new HttpResponseMessage(exchange.Status);
-        if (exchange.ResponseBody is not null)
+        if (exchange.ResponseBytes is not null)
+        {
+            response.Content = new ByteArrayContent(exchange.ResponseBytes);
+            response.Content.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue(exchange.ResponseBytesContentType);
+        }
+        else if (exchange.ResponseBody is not null)
         {
             response.Content = new StringContent(exchange.ResponseBody, System.Text.Encoding.UTF8, "application/json");
         }

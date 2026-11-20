@@ -112,6 +112,32 @@ public class ModelCoverageTests
     }
 
     [Fact]
+    public void Fax_Roundtrip()
+    {
+        Roundtrip(new FaxNumberEntry { Number = "2015550123", DestinationId = 7, Email = "fax@example.com" });
+        Roundtrip(new FaxNumbersData());
+        Roundtrip(new FaxDocumentMeta { Name = "contract.pdf", Size = 123456, ContentType = "application/pdf" });
+        Roundtrip(new FaxSendData { Id = "9f8c2b41a", FromNumber = "2015550123", ToNumber = "2125550123", Status = "queued" });
+        Roundtrip(new FaxJob
+        {
+            Id = "9f8c2b41a",
+            FromNumber = "2015550123",
+            ToNumber = "2125550123",
+            ClientToken = "123e4567-e89b-12d3-a456-426614174000",
+            Status = "sent",
+            SubmittedAt = "2026-11-20T15:04:05Z",
+            StartedAt = "2026-11-20T15:04:41Z",
+            CompletedAt = "2026-11-20T15:05:19Z",
+            Attempts = 1,
+            FailureReason = null,
+            DocumentAvailable = true,
+            DocumentName = "contract.pdf",
+            DocumentSize = 123456,
+        });
+        Roundtrip(new FaxHistoryData { Number = "2015550123", FromTs = 1795100000, ToTs = 1795013600, NextCursor = "cursor" });
+    }
+
+    [Fact]
     public void INumbering_Roundtrip()
     {
         Roundtrip(new OrderCreateRequest { Numbers = new() { new("2015550123"), new(new OrderNumberSpec { Number = "2015551235", Route = 4 }) } });
@@ -380,8 +406,8 @@ public class ModelCoverageTests
     public void Common_AndSdkInfo()
     {
         Roundtrip(new CidrEntry { Cidr = "1.1.1.1/32" });
-        Assert.Equal("2.2.20", SdkInfo.SdkVersion);
-        Assert.Equal("v2.2.20", SdkInfo.ApiVersion);
+        Assert.Equal("2.2.21", SdkInfo.SdkVersion);
+        Assert.Equal("v2.2.21", SdkInfo.ApiVersion);
         Assert.Equal("https://api.voicetel.com", SdkInfo.DefaultBaseUrl);
         Assert.Contains("voicetel-csharp/", SdkInfo.DefaultUserAgent);
     }
