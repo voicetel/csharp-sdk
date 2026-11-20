@@ -58,9 +58,13 @@ public sealed class LrnData
 }
 
 /// <summary>Response data for <c>GET /v2.2/lrn/{number}/{ani}</c>.</summary>
+/// <remarks>
+/// <c>Lrn</c> is <c>null</c> when the dip found no record — the response is
+/// still HTTP 200 (and still billed) with <c>lrn:null</c> (spec v2.2.21).
+/// </remarks>
 public sealed class LrnLookupData
 {
     [JsonPropertyName("ani")] public string Ani { get; set; } = string.Empty;
     [JsonPropertyName("destination")] public string Destination { get; set; } = string.Empty;
-    [JsonPropertyName("lrn")] public LrnData Lrn { get; set; } = new();
+    [JsonPropertyName("lrn")] public LrnData? Lrn { get; set; }
 }

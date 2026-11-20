@@ -499,7 +499,20 @@ public class ResourceTests
         var cn = await c.Lookups.CnamAsync("2015550123");
         Assert.Equal("ACME", cn.Cnam);
         var ln = await c.Lookups.LrnAsync("2015550123", "2015550000");
-        Assert.Equal("L", ln.Lrn.Lrn);
+        Assert.Equal("L", ln.Lrn!.Lrn);
+    }
+
+    [Fact]
+    public async Task Lookups_Lrn_NullDip_Is200WithNullLrn()
+    {
+        // v2.2.21: a failed LRN dip is 200 with lrn:null — still billed.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/lrn/2015550123/2015550100",
+            "{\"ani\":\"2015550100\",\"destination\":\"2015550123\",\"lrn\":null}");
+        var ln = await c.Lookups.LrnAsync("2015550123", "2015550100");
+        Assert.Equal("2015550100", ln.Ani);
+        Assert.Equal("2015550123", ln.Destination);
+        Assert.Null(ln.Lrn);
     }
 
     [Fact]
