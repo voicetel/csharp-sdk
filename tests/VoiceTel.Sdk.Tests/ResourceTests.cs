@@ -263,6 +263,28 @@ public class ResourceTests
     }
 
     [Fact]
+    public async Task Fax_Send_Maps402And413ToTypedKinds()
+    {
+        // v2.2.21: 402 = account needs a positive balance, 413 = documents over the 8 MiB cap.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueJson(HttpMethod.Post, "/v2.2/faxes",
+            "{\"status\":\"error\",\"error\":{\"code\":402,\"message\":\"Your account needs a positive balance to send faxes.\"}}",
+            HttpStatusCode.PaymentRequired);
+        var ex = await Assert.ThrowsAsync<ApiError>(() => c.Fax.SendAsync("2015550123", "2125550123",
+            new[] { FaxDocument.Pdf("contract.pdf", System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 fake")) }));
+        Assert.Equal(ErrorKind.PaymentRequired, ex.Kind);
+        Assert.Equal(402, ex.StatusCode);
+
+        h.EnqueueJson(HttpMethod.Post, "/v2.2/faxes",
+            "{\"status\":\"error\",\"error\":{\"code\":413,\"message\":\"Fax documents must total 8 MiB or smaller.\"}}",
+            HttpStatusCode.RequestEntityTooLarge);
+        var ex2 = await Assert.ThrowsAsync<ApiError>(() => c.Fax.SendAsync("2015550123", "2125550123",
+            new[] { FaxDocument.Pdf("big.pdf", new byte[16]) }));
+        Assert.Equal(ErrorKind.RequestTooLarge, ex2.Kind);
+        Assert.Equal(413, ex2.StatusCode);
+    }
+
+    [Fact]
     public async Task Fax_History_SendsExactQueryParams()
     {
         var (c, h) = TestFactory.NewClient();

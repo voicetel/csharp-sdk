@@ -157,9 +157,11 @@ All HTTP errors throw `ApiError`. Switch on `Kind`:
 |---|---|
 | `ErrorKind.BadRequest` | 400 |
 | `ErrorKind.Authentication` | 401 |
+| `ErrorKind.PaymentRequired` | 402 |
 | `ErrorKind.PermissionDenied` | 403 |
 | `ErrorKind.NotFound` | 404 |
 | `ErrorKind.Conflict` | 409 |
+| `ErrorKind.RequestTooLarge` | 413 |
 | `ErrorKind.RateLimit` | 429 |
 | `ErrorKind.Server` | 5xx |
 | `ErrorKind.Unknown` | other / transport |
