@@ -96,9 +96,9 @@ public class ModelCoverageTests
     {
         Roundtrip(new E911AddressRequest { Address1 = "a", Address2 = "b", City = "c", State = "s", Zip = "z" });
         Roundtrip(new E911CreateRequest { Dn = "d", Callername = "c", Address1 = "a", Address2 = "b", City = "c", State = "s", Zip = "z" });
-        Roundtrip(new E911ProvisionByIdRequest { Callername = "c", AddressId = 1 });
+        Roundtrip(new E911ProvisionByIdRequest { Callername = "c", AddressId = "123a45b678c9d012e3f45a67b890c123" });
         Roundtrip(new E911Entry { Dn = "d", Callername = "c", Address1 = "a", Address2 = "b", City = "c", State = "s", Zip = "z" });
-        Roundtrip(new E911ValidatedAddress { AddressId = 1, Address1 = "a", Address2 = "b", City = "c", State = "s", Zip = "z" });
+        Roundtrip(new E911ValidatedAddress { AddressId = "123a45b678c9d012e3f45a67b890c123", Address1 = "a", Address2 = "b", City = "c", State = "s", Zip = "z" });
         Roundtrip(new E911AllData());
         Roundtrip(new E911RecordData());
         Roundtrip(new E911ValidateData());
@@ -109,6 +109,32 @@ public class ModelCoverageTests
         Roundtrip(new GatewayNumberSummary { Number = "n", Translated = "t", Forward = true, ForwardTo = "f", Cnam = true, Carrier = 1, SmsEnabled = true, FaxEnabled = true });
         Roundtrip(new GatewaysListData());
         Roundtrip(new GatewayNumbersData());
+    }
+
+    [Fact]
+    public void Fax_Roundtrip()
+    {
+        Roundtrip(new FaxNumberEntry { Number = "2015550123", DestinationId = 7, Email = "fax@example.com" });
+        Roundtrip(new FaxNumbersData());
+        Roundtrip(new FaxDocumentMeta { Name = "contract.pdf", Size = 123456, ContentType = "application/pdf" });
+        Roundtrip(new FaxSendData { Id = "9f8c2b41a", FromNumber = "2015550123", ToNumber = "2125550123", Status = "queued" });
+        Roundtrip(new FaxJob
+        {
+            Id = "9f8c2b41a",
+            FromNumber = "2015550123",
+            ToNumber = "2125550123",
+            ClientToken = "123e4567-e89b-12d3-a456-426614174000",
+            Status = "sent",
+            SubmittedAt = "2026-11-20T15:04:05Z",
+            StartedAt = "2026-11-20T15:04:41Z",
+            CompletedAt = "2026-11-20T15:05:19Z",
+            Attempts = 1,
+            FailureReason = null,
+            DocumentAvailable = true,
+            DocumentName = "contract.pdf",
+            DocumentSize = 123456,
+        });
+        Roundtrip(new FaxHistoryData { Number = "2015550123", FromTs = 1795100000, ToTs = 1795013600, NextCursor = "cursor" });
     }
 
     [Fact]
@@ -152,7 +178,8 @@ public class ModelCoverageTests
         Roundtrip(new InventorySearchData());
         Roundtrip(new InventoryCoverageData());
         Roundtrip(new OrderFailedEntry { Number = "n", Reason = "r" });
-        Roundtrip(new OrderCreateData { OrderId = "o", AmountCharged = 1, NumbersOrdered = new() { "n" }, Failed = new() });
+        Roundtrip(new OrderRoute { Number = "2015550100", Route = 4 });
+        Roundtrip(new OrderCreateData { OrderId = "o", AmountCharged = 1, NumbersOrdered = new() { "n" }, Routes = new() { new OrderRoute { Number = "n", Route = 4 } }, Failed = new() });
         Roundtrip(new PortListData());
         Roundtrip(new PortDetailData());
         Roundtrip(new PortSubmitData { Pid = "p", Ticket = 1, Message = "m", LoaUrl = "l", PortUrl = "p" });
@@ -190,15 +217,37 @@ public class ModelCoverageTests
         Roundtrip(new CnamData { Cnam = "c", Number = "n" });
         Roundtrip(new LrnData { Lrn = "l", State = "s", City = "c", Rc = "r", Lata = "l", Ocn = "o", Lec = "l", LecType = "t", Jurisdiction = "j", Local = "Y" });
         Roundtrip(new LrnLookupData { Ani = "a", Destination = "d", Lrn = new LrnData() });
+        Roundtrip(new CarrierInfo { Name = "EXAMPLE CARRIER", Type = "voip", MobileCountryCode = "310", MobileNetworkCode = "456", ErrorCode = 0 });
+        Roundtrip(new CarrierData { Number = "2015550123", Carrier = new CarrierInfo { Name = "EXAMPLE CARRIER", Type = "voip" } });
+    }
+
+    [Fact]
+    public void CarrierInfo_MapsUpstreamSnakeCaseWireNames()
+    {
+        var json = "{\"name\":\"EXAMPLE CARRIER\",\"type\":\"voip\",\"mobile_country_code\":\"310\",\"mobile_network_code\":\"456\",\"error_code\":0}";
+        var info = JsonSerializer.Deserialize<CarrierInfo>(json);
+        Assert.NotNull(info);
+        Assert.Equal("EXAMPLE CARRIER", info!.Name);
+        Assert.Equal("voip", info.Type);
+        Assert.Equal("310", info.MobileCountryCode);
+        Assert.Equal("456", info.MobileNetworkCode);
+        Assert.Equal(0, info.ErrorCode);
+
+        var serialized = JsonSerializer.Serialize(info, Options);
+        Assert.Contains("\"mobile_country_code\":\"310\"", serialized);
+        Assert.Contains("\"mobile_network_code\":\"456\"", serialized);
+        Assert.Contains("\"error_code\":0", serialized);
+        Assert.DoesNotContain("mobileCountryCode", serialized);
     }
 
     [Fact]
     public void Messaging_Roundtrip()
     {
         Roundtrip(new MessageSendRequest { FromNumber = "f", ToNumber = "t", Text = "x", Subject = "s", MediaUrls = new() { "u" } });
+        Roundtrip(new MessageSendRequest { FromNumber = "f", ToNumber = "t", MediaUrls = new() { "u" } }); // media-only MMS: no text
         Roundtrip(new MessagingBrandCreateRequest { MessagingBrandId = "B", MessagingBrandName = "n", MessagingBrandDescription = "d" });
         Roundtrip(new MessagingCampaignCreateRequest { MessagingBrandId = "B", ExternalCampaignId = "e", CampaignDescription = "d", CampaignClassName = "c", CampaignStartDate = "s" });
-        Roundtrip(new MessageRecordValue { SourceNumber = "s", DestinationNumber = "d", Direction = "in", Rate = "0.01", Number = "2015550123", Message = "m" });
+        Roundtrip(new MessageRecordValue { SourceNumber = "s", DestinationNumber = "d", Direction = "in", Rate = "0.01", Number = "2015550123", Message = "m", MessageText = "stat:DELIVRD", TransactionGuid = "g", ConcatenatedMessage = "002", Attachments = new List<object> { new() }, Subject = "s", Ip = "203.0.113.10" });
         Roundtrip(new MessageRecord { Id = "i", Key = new(), Value = new() });
         Roundtrip(new MessageHistoryData { Number = "n", Type = "sms", FromTs = 1, ToTs = 2, Messages = new() });
         Roundtrip(new MessageSendData { Id = "i", Type = "sms", FromNumber = "f", ToNumber = "t", Parts = 1, Subject = "s", MediaUrls = new() { "u" } });
@@ -249,6 +298,34 @@ public class ModelCoverageTests
         Roundtrip(new NumbersListData());
         Roundtrip(new NumbersMessagingListData());
         Roundtrip(new PortOutPinUpdateData { Number = "n", PortOutPin = "1234", Changed = true });
+
+        Roundtrip(new DirectoryListing
+        {
+            Type = "B",
+            Name = "Acme Corp",
+            FirstName = "Jane",
+            LastName = "Doe",
+            StreetNumber = "100",
+            StreetName = "Broadway",
+            StreetType = "St",
+            StreetSuffix = "NE",
+            Location = "Suite 900",
+            City = "New York",
+            State = "NY",
+            Zip = "10005",
+            Complex = false,
+        });
+        Roundtrip(new DirectoryListingRequest { Type = "business", Name = "Acme Corp", City = "New York", State = "NY", Zip = "10005" });
+        Roundtrip(new DirectoryListingRequest { Type = "residence", FirstName = "Jane", LastName = "Doe", City = "New York", State = "NY", Zip = "10005" });
+        Roundtrip(new DirectoryListingData
+        {
+            Number = "2015550123",
+            Status = "listed",
+            Eligible = true,
+            Listing = new DirectoryListing { Type = "B", Name = "Acme Corp" },
+            Pending = null,
+            OrderId = "1026472",
+        });
     }
 
     [Fact]
@@ -329,8 +406,8 @@ public class ModelCoverageTests
     public void Common_AndSdkInfo()
     {
         Roundtrip(new CidrEntry { Cidr = "1.1.1.1/32" });
-        Assert.Equal("2.2.15", SdkInfo.SdkVersion);
-        Assert.Equal("v2.2.15", SdkInfo.ApiVersion);
+        Assert.Equal("2.2.21", SdkInfo.SdkVersion);
+        Assert.Equal("v2.2.21", SdkInfo.ApiVersion);
         Assert.Equal("https://api.voicetel.com", SdkInfo.DefaultBaseUrl);
         Assert.Contains("voicetel-csharp/", SdkInfo.DefaultUserAgent);
     }

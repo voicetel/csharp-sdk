@@ -6,16 +6,24 @@ namespace VoiceTel.Sdk.Models;
 /// <summary>
 /// Body for <c>POST /v2.2/messages</c>.
 /// <para>
-/// Wire field names are <c>fromNumber</c> / <c>toNumber</c>. Supplying
-/// <see cref="MediaUrls"/> switches the message to MMS and unlocks <see cref="Subject"/>.
+/// Wire field names are <c>fromNumber</c> / <c>toNumber</c>. <see cref="Text"/> is
+/// required for SMS; for MMS it is optional (at most 2048 characters) — a media-only
+/// MMS sends no text at all. Supplying <see cref="MediaUrls"/> switches the message
+/// to MMS.
 /// </para>
 /// </summary>
 public sealed class MessageSendRequest
 {
     [JsonPropertyName("fromNumber")] public string FromNumber { get; set; } = string.Empty;
     [JsonPropertyName("toNumber")] public string ToNumber { get; set; } = string.Empty;
-    [JsonPropertyName("text")] public string Text { get; set; } = string.Empty;
+
+    /// <summary>Message body (UTF-8). Required for SMS; optional for MMS, where it may be at most 2048 characters.</summary>
+    [JsonPropertyName("text")] public string? Text { get; set; }
+
+    /// <summary>Deprecated. Accepted for compatibility but not delivered on most messaging routes; do not use.</summary>
     [JsonPropertyName("subject")] public string? Subject { get; set; }
+
+    /// <summary>Publicly reachable http(s) URLs of the media to send; when present it must contain at least one URL and makes this an MMS.</summary>
     [JsonPropertyName("mediaUrls")] public List<string>? MediaUrls { get; set; }
 }
 
@@ -41,7 +49,13 @@ public sealed class MessagingCampaignCreateRequest
     [JsonPropertyName("campaignStartDate")] public string? CampaignStartDate { get; set; }
 }
 
-/// <summary>Per-record value inside a <see cref="MessageRecord"/>.</summary>
+/// <summary>
+/// Per-record value inside a <see cref="MessageRecord"/>. Which fields are present
+/// depends on the requested record type: <see cref="MessageText"/>,
+/// <see cref="TransactionGuid"/> and <see cref="ConcatenatedMessage"/> on delivery
+/// receipts (dlr), <see cref="Attachments"/> and <see cref="Subject"/> on mms,
+/// <see cref="Ip"/> on outbound sms.
+/// </summary>
 public sealed class MessageRecordValue
 {
     [JsonPropertyName("sourceNumber")] public string? SourceNumber { get; set; }
@@ -51,6 +65,24 @@ public sealed class MessageRecordValue
     /// <summary>Far-end number (sms/mms only).</summary>
     [JsonPropertyName("number")] public string? Number { get; set; }
     [JsonPropertyName("message")] public string? Message { get; set; }
+
+    /// <summary>The delivery receipt as received, including stat: and err: (dlr).</summary>
+    [JsonPropertyName("messageText")] public string? MessageText { get; set; }
+
+    /// <summary>Id of the message this receipt is for (dlr).</summary>
+    [JsonPropertyName("transactionGUID")] public string? TransactionGuid { get; set; }
+
+    /// <summary>Present on some receipts for multi-part messages (dlr).</summary>
+    [JsonPropertyName("concatenatedMessage")] public string? ConcatenatedMessage { get; set; }
+
+    /// <summary>mms only. Inbound: one object per media file (contentFile, contentType, ...). Outbound: the submitted media URL(s) — a string or array. Raw JSON, hence <see cref="object"/>.</summary>
+    [JsonPropertyName("attachments")] public object? Attachments { get; set; }
+
+    /// <summary>Subject, if one was sent or received (mms).</summary>
+    [JsonPropertyName("subject")] public string? Subject { get; set; }
+
+    /// <summary>Address the send request came from (outbound sms only).</summary>
+    [JsonPropertyName("ip")] public string? Ip { get; set; }
 }
 
 /// <summary>One row in <see cref="MessageHistoryData.Messages"/>.</summary>

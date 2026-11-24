@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.2.21 — 2026-11-20
+
+Spec v2.2.21 sync — full audit against the live server code, plus the new Fax API.
+
+### Breaking
+- **`Acl.RemoveAsync` now takes an `AclModifyRequest`** (the same `{acl: [{cidr}]}` body as `AddAsync`). The old `cidrs` query parameter is not read by the live API (v2.2.0 handler rewrite) — requests using it silently removed nothing.
+
+### Added
+- **Fax API** (`client.Fax`): `ListNumbersAsync()` (fax-capable numbers), `SendAsync(fromNumber, toNumber, documents, idempotencyKey)` (multipart, 201, queued; idempotent per Idempotency-Key — retry-safe across restarts), `HistoryAsync(new FaxHistoryOptions { ... })` (cursor paging, status filter), `GetAsync(id)` (job shape with timestamps, attempts, failureReason), `DownloadDocumentAsync(id)` (the PDF as raw bytes).
+- Transport: multipart request support, raw-bytes responses, and caller-supplied idempotency keys.
+- Typed error kinds for HTTP 402 (`PaymentRequired` — positive balance required: fax send, directory listing) and HTTP 413 (`RequestTooLarge` — upload over 8 MiB), both previously mapped to `Unknown`.
+
+### Fixed
+- Fax error envelopes carry an extra `serverTime` field — parsed tolerantly.
+
+## 2.2.20 — 2026-11-20
+
+Spec v2.2.20 sync. Adds the four new operations and tracks the truth fixes from spec v2.2.18–v2.2.20.
+
+### Added
+- **Directory listing (411)** on a number: `client.Numbers.GetDirectoryListingAsync(number)`, `.SetDirectoryListingAsync(number, new DirectoryListingRequest { ... })`, `.RemoveDirectoryListingAsync(number)` — GET returns the published state (`listed` / `not_listed` / `pending` / `removing` / `unavailable`, `eligible`, `listing`, `pending`); PUT/DELETE are accepted at once (HTTP 202, applied in the background) with an `orderId`.
+- **Carrier & line-type lookup**: `client.Lookups.CarrierAsync(number)` — carrier details with the upstream field names (`mobile_country_code`, `mobile_network_code`, `error_code`); billed per lookup at the account's CNAM rate.
+- `OrderCreateData.Routes` — POST /v2.2/orders now returns the route each ordered number was placed on.
+
+### Changed
+- e911 `addressid` is a **string** (hex), not an integer, on both the validation response and `E911ProvisionByIdRequest`. (Breaking: property type changed `int` → `string`.)
+- `MessageSendRequest.Text` is optional (media-only MMS is valid; at most 2048 chars); `Subject` is deprecated (still accepted); `MediaUrls` must be non-empty when present. (Breaking: `Text` changed `string` → `string?`.)
+- Message-history `value` records carry the full field set: `MessageText`, `TransactionGuid`, `ConcatenatedMessage` (dlr), `Attachments` (mms — raw JSON: object array inbound, string/URLs outbound), `Subject` (mms), `Ip` (outbound sms).
+- DID `route` fields accept any gateway id on the account (GET /v2.2/gateways) in addition to the global routes; the API rejects an unknown route with 400.
+- Version constants (`SdkInfo`) corrected to match the package version (they had been left at 2.2.15).
+
 ## 2.2.17 — 2026-10-17
 
 Spec v2.2.17 sync.

@@ -7,14 +7,14 @@ namespace VoiceTel.Sdk.Models;
 public sealed class NumberAddRequest
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
-    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Used when adding a number.</summary>
+    /// <summary>Route: a gateway id on this account (<c>GET /v2.2/gateways</c>) or a global route — 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Used when adding a number; an unknown route is rejected with 400.</summary>
     [JsonPropertyName("route")] public int? Route { get; set; }
 }
 
 /// <summary>Body for <c>PUT /v2.2/numbers/{number}/route</c>.</summary>
 public sealed class NumberRouteRequest
 {
-    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Set with <c>PUT /v2.2/numbers/{number}/route</c>.</summary>
+    /// <summary>Route: a gateway id on this account (<c>GET /v2.2/gateways</c>) or a global route — 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Set with <c>PUT /v2.2/numbers/{number}/route</c>.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 
@@ -73,6 +73,8 @@ public sealed class NumberCampaignAssignRequest
 public sealed class NumberMoveRequest
 {
     [JsonPropertyName("accountId")] public int AccountId { get; set; }
+
+    /// <summary>Route on the destination account: a gateway id on that account (<c>GET /v2.2/gateways</c>) or a global route — 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 
@@ -87,7 +89,7 @@ public sealed class NumberDetail
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
     [JsonPropertyName("translated")] public string Translated { get; set; } = string.Empty;
-    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Per-number route in the list.</summary>
+    /// <summary>Route: a gateway id on this account (<c>GET /v2.2/gateways</c>) or a global route — 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Per-number route in the list.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
     [JsonPropertyName("gateway")] public string? Gateway { get; set; }
     [JsonPropertyName("cnam")] public bool Cnam { get; set; }
@@ -145,7 +147,7 @@ public sealed class NumberMessagingState
 public sealed class NumberAddData
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
-    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Returned after adding a number.</summary>
+    /// <summary>Route: a gateway id on this account (<c>GET /v2.2/gateways</c>) or a global route — 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Returned after adding a number.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 
@@ -191,7 +193,7 @@ public sealed class NumberMoveData
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
     [JsonPropertyName("accountId")] public int AccountId { get; set; }
-    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Route on the destination account after the move.</summary>
+    /// <summary>Route on the destination account after the move: a gateway id on that account (<c>GET /v2.2/gateways</c>) or a global route — 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 
@@ -199,7 +201,7 @@ public sealed class NumberMoveData
 public sealed class NumberRouteData
 {
     [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
-    /// <summary>Global route type: 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Echo of the applied route.</summary>
+    /// <summary>Route: a gateway id on this account (<c>GET /v2.2/gateways</c>) or a global route — 1 USER, 2 T30, 3 VOICE_BRIDGE, 4 DID (default), 5 T38, 6 VOICEML, 8 SDN, 9 MOBILE. Echo of the applied route.</summary>
     [JsonPropertyName("route")] public int Route { get; set; }
 }
 
@@ -313,4 +315,129 @@ public sealed class PortOutPinUpdateData
     [JsonPropertyName("portOutPin")] public string PortOutPin { get; set; } = string.Empty;
     /// <summary>True if this request set the PIN; false if the number already had one, which is locked for 30 days once set and is returned unchanged.</summary>
     [JsonPropertyName("changed")] public bool Changed { get; set; }
+}
+
+// ------------------------------------------------------------- directory listing
+
+/// <summary>
+/// A 411 directory listing, as published (GET) or as submitted (PUT echo).
+/// <see cref="Type"/> "B" (business) carries the name in <see cref="Name"/>;
+/// "R" (residence) carries <see cref="FirstName"/> and <see cref="LastName"/>.
+/// All address fields may be empty strings. <see cref="Complex"/> marks a
+/// multi-line listing, which is read-only through the API.
+/// </summary>
+public sealed class DirectoryListing
+{
+    /// <summary>B (business) or R (residence).</summary>
+    [JsonPropertyName("type")] public string Type { get; set; } = string.Empty;
+
+    /// <summary>Business name (type B).</summary>
+    [JsonPropertyName("name")] public string? Name { get; set; }
+
+    /// <summary>Resident's first name (type R).</summary>
+    [JsonPropertyName("firstName")] public string? FirstName { get; set; }
+
+    /// <summary>Resident's last name (type R).</summary>
+    [JsonPropertyName("lastName")] public string? LastName { get; set; }
+    [JsonPropertyName("streetNumber")] public string? StreetNumber { get; set; }
+    [JsonPropertyName("streetName")] public string? StreetName { get; set; }
+
+    /// <summary>Street type, e.g. St, Ave.</summary>
+    [JsonPropertyName("streetType")] public string? StreetType { get; set; }
+
+    /// <summary>Street direction: N, S, E, W, NE, NW, SE or SW.</summary>
+    [JsonPropertyName("streetSuffix")] public string? StreetSuffix { get; set; }
+
+    /// <summary>Suite or unit.</summary>
+    [JsonPropertyName("location")] public string? Location { get; set; }
+    [JsonPropertyName("city")] public string? City { get; set; }
+
+    /// <summary>Two-letter US state or territory code, as published.</summary>
+    [JsonPropertyName("state")] public string? State { get; set; }
+
+    /// <summary>5-digit ZIP.</summary>
+    [JsonPropertyName("zip")] public string? Zip { get; set; }
+
+    /// <summary>True for a multi-line listing; read-only through the API.</summary>
+    [JsonPropertyName("complex")] public bool? Complex { get; set; }
+}
+
+/// <summary>
+/// Body for <c>PUT /v2.2/numbers/{number}/directory-listing</c> — add or replace
+/// the listing.
+/// <para>
+/// <see cref="Type"/> is <c>business</c> or <c>residence</c> (the B / R shorthand
+/// is also accepted by the server). A business sets <see cref="Name"/>; a residence
+/// sets <see cref="FirstName"/> and <see cref="LastName"/>. The street is optional —
+/// give <see cref="StreetNumber"/> and <see cref="StreetName"/> together, or neither.
+/// <see cref="City"/>, <see cref="State"/> and <see cref="Zip"/> are required.
+/// </para>
+/// </summary>
+public sealed class DirectoryListingRequest
+{
+    /// <summary>business or residence; the shorthand B and R is also accepted.</summary>
+    [JsonPropertyName("type")] public string Type { get; set; } = string.Empty;
+
+    /// <summary>Business name; required for business (max 60 chars).</summary>
+    [JsonPropertyName("name")] public string? Name { get; set; }
+
+    /// <summary>Resident's first name; required for residence (max 30 chars).</summary>
+    [JsonPropertyName("firstName")] public string? FirstName { get; set; }
+
+    /// <summary>Resident's last name; required for residence (max 30 chars).</summary>
+    [JsonPropertyName("lastName")] public string? LastName { get; set; }
+
+    /// <summary>Up to 10 letters or digits; give it together with <see cref="StreetName"/>, or neither.</summary>
+    [JsonPropertyName("streetNumber")] public string? StreetNumber { get; set; }
+
+    /// <summary>Street name; give it together with <see cref="StreetNumber"/>, or neither.</summary>
+    [JsonPropertyName("streetName")] public string? StreetName { get; set; }
+
+    /// <summary>A word such as St, Ave or Rd.</summary>
+    [JsonPropertyName("streetType")] public string? StreetType { get; set; }
+
+    /// <summary>Street direction (N, S, E, W, NE, NW, SE, SW); requires a street name.</summary>
+    [JsonPropertyName("streetSuffix")] public string? StreetSuffix { get; set; }
+
+    /// <summary>Suite or unit; requires a street name.</summary>
+    [JsonPropertyName("location")] public string? Location { get; set; }
+
+    /// <summary>Required. City the listing is at (max 40 chars).</summary>
+    [JsonPropertyName("city")] public string City { get; set; } = string.Empty;
+
+    /// <summary>Required. Two-letter US state or territory code (57 codes incl DC, PR, VI, GU, AS, MP).</summary>
+    [JsonPropertyName("state")] public string State { get; set; } = string.Empty;
+
+    /// <summary>Required. 5-digit ZIP (a ZIP+4 is accepted and stored as the 5-digit ZIP).</summary>
+    [JsonPropertyName("zip")] public string Zip { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response data for <c>GET/PUT/DELETE /v2.2/numbers/{number}/directory-listing</c>.
+/// <para>
+/// PUT and DELETE are accepted at once (HTTP 202) and applied in the background:
+/// <see cref="Status"/> is <c>pending</c> / <c>removing</c> (or <c>not_listed</c>
+/// when a pending add was cancelled) and <see cref="OrderId"/> carries the carrier
+/// order reference. GET reports the state as published, with <see cref="Eligible"/>
+/// telling whether a listing can be added.
+/// </para>
+/// </summary>
+public sealed class DirectoryListingData
+{
+    [JsonPropertyName("number")] public string Number { get; set; } = string.Empty;
+
+    /// <summary>listed (published), not_listed (none), pending (an add or change is being applied), removing (a removal is being applied), or unavailable (the number cannot be listed).</summary>
+    [JsonPropertyName("status")] public string Status { get; set; } = string.Empty;
+
+    /// <summary>Whether a listing can be added to this number (GET).</summary>
+    [JsonPropertyName("eligible")] public bool? Eligible { get; set; }
+
+    /// <summary>The published listing, or <c>null</c>.</summary>
+    [JsonPropertyName("listing")] public DirectoryListing? Listing { get; set; }
+
+    /// <summary>A submitted listing not yet published, or <c>null</c>.</summary>
+    [JsonPropertyName("pending")] public DirectoryListing? Pending { get; set; }
+
+    /// <summary>Reference of the submitted change (PUT and DELETE), or <c>null</c>.</summary>
+    [JsonPropertyName("orderId")] public string? OrderId { get; set; }
 }

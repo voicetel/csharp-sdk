@@ -17,6 +17,10 @@ public enum ErrorKind
     /// <summary>HTTP 401 — bearer token missing, expired, or invalid.</summary>
     Authentication,
 
+    /// <summary>HTTP 402 — the account balance must be positive for this
+    /// action (fax send, directory listing).</summary>
+    PaymentRequired,
+
     /// <summary>HTTP 403 — authenticated but not allowed.</summary>
     PermissionDenied,
 
@@ -25,6 +29,10 @@ public enum ErrorKind
 
     /// <summary>HTTP 409 — request conflicts with current state.</summary>
     Conflict,
+
+    /// <summary>HTTP 413 — the upload is too large (fax documents must total
+    /// 8 MiB or smaller).</summary>
+    RequestTooLarge,
 
     /// <summary>HTTP 429 — exceeded a rate limit (e.g. the 6/hour/IP cap on the
     /// rate-limited account endpoints, or the 30/hour health-check cap).</summary>
@@ -89,9 +97,11 @@ public sealed class ApiError : Exception
     {
         400 => ErrorKind.BadRequest,
         401 => ErrorKind.Authentication,
+        402 => ErrorKind.PaymentRequired,
         403 => ErrorKind.PermissionDenied,
         404 => ErrorKind.NotFound,
         409 => ErrorKind.Conflict,
+        413 => ErrorKind.RequestTooLarge,
         429 => ErrorKind.RateLimit,
         >= 500 and < 600 => ErrorKind.Server,
         _ => ErrorKind.Unknown,
