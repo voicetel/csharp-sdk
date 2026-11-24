@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using VoiceTel.Sdk.Models;
+using VoiceTel.Sdk.Resources;
 using Xunit;
 
 namespace VoiceTel.Sdk.Tests;
@@ -84,10 +85,26 @@ public class ResourceTests
         var body = new AclModifyRequest { Acl = new List<CidrEntry> { new() { Cidr = "1.1.1.1/32" } } };
         Assert.Single((await c.Acl.ListAsync()).Acl);
         Assert.Single((await c.Acl.AddAsync(body)).Added);
-        Assert.Single((await c.Acl.RemoveAsync(new[] { "1.1.1.1/32" })).Removed);
+        Assert.Single((await c.Acl.RemoveAsync(body)).Removed);
+        // remove now sends the same {acl: [...]} body as add — no cidrs query parameter
         var removeUri = h.Captured[2].Request.RequestUri!.ToString();
-        Assert.Contains("cidrs=1.1.1.1%2F32", removeUri);
-        Assert.Equal(string.Empty, h.Captured[2].Body); // remove takes no body
+        Assert.DoesNotContain("cidrs=", removeUri);
+        Assert.DoesNotContain("?", removeUri); // empty query string
+        Assert.Equal("{\"acl\":[{\"cidr\":\"1.1.1.1/32\"}]}", h.Captured[2].Body);
+    }
+
+    [Fact]
+    public async Task Acl_RemoveConflictBodyIsPreservedInError()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueJson(HttpMethod.Delete, "/v2.2/acl",
+            "{\"status\":\"error\",\"error\":{\"code\":409,\"message\":\"One or more ACL entries could not be removed\"}," +
+            "\"data\":{\"removed\":[{\"cidr\":\"203.0.113.0/24\"}],\"failed\":[{\"cidr\":\"203.0.113.9/32\",\"reason\":\"DB delete failed\"}]}}",
+            HttpStatusCode.Conflict);
+        var ex = await Assert.ThrowsAsync<ApiError>(() =>
+            c.Acl.RemoveAsync(new AclModifyRequest()));
+        Assert.Equal(ErrorKind.Conflict, ex.Kind);
+        Assert.NotNull(ex.Body);
     }
 
     [Fact]
@@ -125,7 +142,7 @@ public class ResourceTests
         var (c, h) = TestFactory.NewClient();
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/e911", "{\"records\":[{\"dn\":\"1X\"}]}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/e911", "{\"record\":{\"dn\":\"1X\"}}");
-        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/e911/validations", "{\"address\":{\"addressid\":7,\"address1\":\"a\",\"city\":\"c\",\"state\":\"NJ\",\"zip\":\"01\"}}");
+        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/e911/validations", "{\"address\":{\"addressid\":\"123a45b678c9d012e3f45a67b890c123\",\"address1\":\"a\",\"city\":\"c\",\"state\":\"NJ\",\"zip\":\"01\"}}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/e911/1234567890", "{\"record\":{\"dn\":\"11234567890\"}}");
         h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/e911/1234567890", "{\"record\":{\"dn\":\"11234567890\"}}");
         h.EnqueueNoContent(HttpMethod.Delete, "/v2.2/e911/1234567890");
@@ -133,10 +150,222 @@ public class ResourceTests
         Assert.Single((await c.E911.ListAsync()).Records);
         await c.E911.CreateAsync(new E911CreateRequest { Dn = "1234567890", Callername = "Test", Address1 = "a", City = "c", State = "NJ", Zip = "01" });
         var v = await c.E911.ValidateAsync(new E911AddressRequest { Address1 = "a", City = "c", State = "NJ", Zip = "01" });
-        Assert.Equal(7, v.Address.AddressId);
+        Assert.Equal("123a45b678c9d012e3f45a67b890c123", v.Address.AddressId);
         await c.E911.GetAsync("1234567890");
-        await c.E911.ProvisionAsync("1234567890", new E911ProvisionByIdRequest { Callername = "Test", AddressId = 7 });
+        await c.E911.ProvisionAsync("1234567890", new E911ProvisionByIdRequest { Callername = "Test", AddressId = v.Address.AddressId });
         await c.E911.RemoveAsync("1234567890");
+    }
+
+    [Fact]
+    public async Task E911_AddressId_RoundTripsAsString()
+    {
+        // v2.2.18+: addressid is a hex string on the wire, both directions.
+        var (c, h) = TestFactory.NewClient();
+        const string id = "123a45b678c9d012e3f45a67b890c123";
+        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/e911/validations",
+            "{\"address\":{\"addressid\":\"" + id + "\",\"address1\":\"a\",\"city\":\"c\",\"state\":\"NJ\",\"zip\":\"01\"}}");
+        h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/e911/1234567890", "{\"record\":{\"dn\":\"11234567890\"}}");
+
+        var v = await c.E911.ValidateAsync(new E911AddressRequest { Address1 = "a", City = "c", State = "NJ", Zip = "01" });
+        Assert.Equal(id, v.Address.AddressId);
+        await c.E911.ProvisionAsync("1234567890", new E911ProvisionByIdRequest { Callername = "Test", AddressId = v.Address.AddressId });
+
+        var body = h.Captured[1].Body;
+        Assert.Contains("\"addressid\":\"" + id + "\"", body); // JSON string, not a number
+    }
+
+    // ------------------------------------------------------------------ Fax ---
+
+    private const string FaxJobJson =
+        "{\"id\":\"9f8c2b41a\",\"fromNumber\":\"2015550123\",\"toNumber\":\"2125550123\"," +
+        "\"clientToken\":\"123e4567-e89b-12d3-a456-426614174000\",\"status\":\"sent\"," +
+        "\"submittedAt\":\"2026-11-20T15:04:05Z\",\"startedAt\":\"2026-11-20T15:04:41Z\"," +
+        "\"completedAt\":\"2026-11-20T15:05:19Z\",\"attempts\":1,\"failureReason\":null," +
+        "\"documents\":[{\"name\":\"contract.pdf\",\"size\":123456,\"contentType\":\"application/pdf\"}]," +
+        "\"documentAvailable\":true,\"documentName\":\"contract.pdf\",\"documentSize\":123456}";
+
+    [Fact]
+    public async Task Fax_ListNumbers_Decodes()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/fax",
+            "{\"numbers\":[{\"number\":\"2015550123\",\"destinationId\":7,\"email\":\"fax@example.com\"}]}");
+        var r = await c.Fax.ListNumbersAsync();
+        Assert.Single(r.Numbers);
+        Assert.Equal("2015550123", r.Numbers[0].Number);
+        Assert.Equal(7, r.Numbers[0].DestinationId);
+        Assert.Equal("fax@example.com", r.Numbers[0].Email);
+    }
+
+    [Fact]
+    public async Task Fax_Send_PostsMultipartWithUuidIdempotencyKey()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.Enqueue(new MockExchange
+        {
+            Method = HttpMethod.Post,
+            Path = "/v2.2/faxes",
+            Status = HttpStatusCode.Created,
+            ResponseBody = "{\"status\":\"success\",\"data\":{\"id\":\"9f8c2b41a\",\"fromNumber\":\"2015550123\"," +
+                "\"toNumber\":\"2125550123\",\"status\":\"queued\"," +
+                "\"documents\":[{\"name\":\"contract.pdf\",\"size\":123456,\"contentType\":\"application/pdf\"}]}}",
+        });
+
+        var r = await c.Fax.SendAsync("2015550123", "2125550123",
+            new[] { FaxDocument.Pdf("contract.pdf", System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 fake")) });
+        Assert.Equal("9f8c2b41a", r.Id);
+        Assert.Equal("queued", r.Status);
+        Assert.Equal(123456, r.Documents[0].Size);
+
+        var request = h.Captured[0].Request;
+        // Idempotency-Key is required on the wire and is a UUID
+        var key = Assert.Single(request.Headers.GetValues("Idempotency-Key"));
+        Assert.Matches(
+            @"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            key);
+
+        // multipart with a boundary
+        var contentType = request.Content!.Headers.ContentType!.ToString();
+        Assert.StartsWith("multipart/form-data; boundary=", contentType);
+        var boundary = contentType["multipart/form-data; boundary=".Length..];
+        var body = h.Captured[0].Body;
+        Assert.Contains("--" + boundary + "\r\n", body);
+        Assert.Contains("Content-Disposition: form-data; name=\"fromNumber\"", body);
+        Assert.Contains("2015550123", body);
+        Assert.Contains("Content-Disposition: form-data; name=\"toNumber\"", body);
+        Assert.Contains("2125550123", body);
+        Assert.Contains("Content-Disposition: form-data; name=\"documents\"; filename=\"contract.pdf\"", body);
+        Assert.Contains("Content-Type: application/pdf", body);
+        Assert.Contains("%PDF-1.4 fake", body);
+        Assert.EndsWith("--" + boundary + "--\r\n", body);
+    }
+
+    [Fact]
+    public async Task Fax_Send_HonorsCallerSuppliedIdempotencyKey()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.Enqueue(new MockExchange
+        {
+            Method = HttpMethod.Post,
+            Path = "/v2.2/faxes",
+            Status = HttpStatusCode.Created,
+            ResponseBody = "{\"status\":\"success\",\"data\":{\"id\":\"x\",\"fromNumber\":\"2015550123\"," +
+                "\"toNumber\":\"2125550123\",\"status\":\"queued\",\"documents\":[]}}",
+        });
+
+        await c.Fax.SendAsync("2015550123", "2125550123",
+            new[] { new FaxDocument("a.pdf", new byte[] { 0x25, 0x50, 0x44, 0x46 }) },
+            idempotencyKey: "123e4567-e89b-12d3-a456-426614174000");
+
+        var request = h.Captured[0].Request;
+        Assert.Equal("123e4567-e89b-12d3-a456-426614174000",
+            Assert.Single(request.Headers.GetValues("Idempotency-Key")));
+    }
+
+    [Fact]
+    public async Task Fax_Send_Maps402And413ToTypedKinds()
+    {
+        // v2.2.21: 402 = account needs a positive balance, 413 = documents over the 8 MiB cap.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueJson(HttpMethod.Post, "/v2.2/faxes",
+            "{\"status\":\"error\",\"error\":{\"code\":402,\"message\":\"Your account needs a positive balance to send faxes.\"}}",
+            HttpStatusCode.PaymentRequired);
+        var ex = await Assert.ThrowsAsync<ApiError>(() => c.Fax.SendAsync("2015550123", "2125550123",
+            new[] { FaxDocument.Pdf("contract.pdf", System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 fake")) }));
+        Assert.Equal(ErrorKind.PaymentRequired, ex.Kind);
+        Assert.Equal(402, ex.StatusCode);
+
+        h.EnqueueJson(HttpMethod.Post, "/v2.2/faxes",
+            "{\"status\":\"error\",\"error\":{\"code\":413,\"message\":\"Fax documents must total 8 MiB or smaller.\"}}",
+            HttpStatusCode.RequestEntityTooLarge);
+        var ex2 = await Assert.ThrowsAsync<ApiError>(() => c.Fax.SendAsync("2015550123", "2125550123",
+            new[] { FaxDocument.Pdf("big.pdf", new byte[16]) }));
+        Assert.Equal(ErrorKind.RequestTooLarge, ex2.Kind);
+        Assert.Equal(413, ex2.StatusCode);
+    }
+
+    [Fact]
+    public async Task Fax_History_SendsExactQueryParams()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/faxes",
+            "{\"number\":\"2015550123\",\"fromTs\":1795100000,\"toTs\":1795013600,\"faxes\":[" + FaxJobJson + "],\"nextCursor\":null}");
+        var r = await c.Fax.HistoryAsync(new FaxHistoryOptions
+        {
+            Number = "2015550123",
+            From = 1795100000,
+            To = 1795013600,
+            Limit = 50,
+            Status = "all",
+        });
+        Assert.Equal("2015550123", r.Number);
+        Assert.Single(r.Faxes);
+        Assert.Equal("sent", r.Faxes[0].Status);
+        Assert.Equal(1, r.Faxes[0].Attempts);
+        Assert.Equal(123456, r.Faxes[0].Documents[0].Size);
+        Assert.True(r.Faxes[0].DocumentAvailable);
+        Assert.Null(r.NextCursor);
+
+        var query = h.Captured[0].Request.RequestUri!.Query;
+        Assert.Contains("number=2015550123", query);
+        Assert.Contains("from=1795100000", query);
+        Assert.Contains("to=1795013600", query);
+        Assert.Contains("limit=50", query);
+        Assert.Contains("status=all", query);
+    }
+
+    [Fact]
+    public async Task Fax_History_PassesPagingCursor()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/faxes",
+            "{\"number\":\"2015550123\",\"fromTs\":1795100000,\"toTs\":1795013600,\"faxes\":[],\"nextCursor\":\"next\"}");
+        var r = await c.Fax.HistoryAsync(new FaxHistoryOptions { Number = "2015550123", Cursor = "cGl0LnN0b3Jl.8b1c" });
+        Assert.Equal("next", r.NextCursor);
+        Assert.Contains("cursor=cGl0LnN0b3Jl.8b1c", h.Captured[0].Request.RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task Fax_Get_DecodesJob()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/faxes/9f8c2b41a", FaxJobJson);
+        var job = await c.Fax.GetAsync("9f8c2b41a");
+        Assert.Equal("9f8c2b41a", job.Id);
+        Assert.Equal("123e4567-e89b-12d3-a456-426614174000", job.ClientToken);
+        Assert.Equal("2026-11-20T15:04:05Z", job.SubmittedAt);
+        Assert.Null(job.FailureReason);
+        Assert.Equal("contract.pdf", job.DocumentName);
+    }
+
+    [Fact]
+    public async Task Fax_DownloadDocument_ReturnsRawBytes()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.Enqueue(new MockExchange
+        {
+            Method = HttpMethod.Get,
+            Path = "/v2.2/faxes/9f8c2b41a/document",
+            ResponseBytes = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 binary-bytes"),
+        });
+
+        var data = await c.Fax.DownloadDocumentAsync("9f8c2b41a");
+
+        // Raw bytes, no envelope parsing.
+        Assert.Equal("%PDF-1.4 binary-bytes", System.Text.Encoding.ASCII.GetString(data));
+    }
+
+    [Fact]
+    public async Task Fax_ErrorEnvelope_ToleratesServerTimeField()
+    {
+        // Fax errors add serverTime beside the standard envelope — parse tolerantly.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueJson(HttpMethod.Get, "/v2.2/faxes/deadbeef",
+            "{\"status\":\"error\",\"error\":{\"code\":404,\"message\":\"Not found\"},\"serverTime\":1795100000}",
+            HttpStatusCode.NotFound);
+        var ex = await Assert.ThrowsAsync<ApiError>(() => c.Fax.GetAsync("deadbeef"));
+        Assert.Equal(ErrorKind.NotFound, ex.Kind);
+        Assert.Equal("Not found", ex.Message);
     }
 
     // -------------------------------------------------------------- Gateways ---
@@ -172,7 +401,7 @@ public class ResourceTests
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/inventory/coverage",
             "{\"coverage\":[{\"count\":10,\"npa\":\"201\"}]}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/orders",
-            "{\"orderId\":\"o\",\"amountCharged\":1.0,\"numbersOrdered\":[\"2015550123\"]}");
+            "{\"orderId\":\"o\",\"amountCharged\":1.0,\"numbersOrdered\":[\"2015550123\"],\"routes\":[{\"number\":\"2015550123\",\"route\":4}]}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/ports", "{\"ports\":[{\"status\":\"new\"}]}");
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/ports/y0d36", "{\"port\":{\"status\":\"done\"}}");
         h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/ports",
@@ -201,6 +430,9 @@ public class ResourceTests
             },
         });
         Assert.Equal("o", ord.OrderId);
+        Assert.Single(ord.Routes);
+        Assert.Equal("2015550123", ord.Routes[0].Number);
+        Assert.Equal(4, ord.Routes[0].Route);
         await c.INumbering.PortsAsync();
         await c.INumbering.PortAsync("y0d36");
         var p = await c.INumbering.SubmitPortAsync(new PortSubmitRequest
@@ -267,7 +499,47 @@ public class ResourceTests
         var cn = await c.Lookups.CnamAsync("2015550123");
         Assert.Equal("ACME", cn.Cnam);
         var ln = await c.Lookups.LrnAsync("2015550123", "2015550000");
-        Assert.Equal("L", ln.Lrn.Lrn);
+        Assert.Equal("L", ln.Lrn!.Lrn);
+    }
+
+    [Fact]
+    public async Task Lookups_Lrn_NullDip_Is200WithNullLrn()
+    {
+        // v2.2.21: a failed LRN dip is 200 with lrn:null — still billed.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/lrn/2015550123/2015550100",
+            "{\"ani\":\"2015550100\",\"destination\":\"2015550123\",\"lrn\":null}");
+        var ln = await c.Lookups.LrnAsync("2015550123", "2015550100");
+        Assert.Equal("2015550100", ln.Ani);
+        Assert.Equal("2015550123", ln.Destination);
+        Assert.Null(ln.Lrn);
+    }
+
+    [Fact]
+    public async Task Lookups_Carrier_DecodesUpstreamSnakeCaseFields()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/carrier/2015550123",
+            "{\"number\":\"2015550123\",\"carrier\":{\"name\":\"EXAMPLE CARRIER\",\"type\":\"voip\"," +
+            "\"mobile_country_code\":null,\"mobile_network_code\":null,\"error_code\":null}}");
+        var d = await c.Lookups.CarrierAsync("2015550123");
+        Assert.Equal("2015550123", d.Number);
+        Assert.Equal("EXAMPLE CARRIER", d.Carrier!.Name);
+        Assert.Equal("voip", d.Carrier.Type);
+        Assert.Null(d.Carrier.MobileCountryCode);
+        Assert.Null(d.Carrier.MobileNetworkCode);
+        Assert.Null(d.Carrier.ErrorCode);
+        Assert.Equal("/v2.2/carrier/2015550123", h.Captured[0].Request.RequestUri!.AbsolutePath);
+
+        // mobile numbers carry mcc/mnc; a lookup that could not be resolved carries error_code
+        var (c2, h2) = TestFactory.NewClient();
+        h2.EnqueueEnvelope(HttpMethod.Get, "/v2.2/carrier/2015550123",
+            "{\"number\":\"2015550123\",\"carrier\":{\"name\":\"MOBILE CARRIER\",\"type\":\"mobile\"," +
+            "\"mobile_country_code\":\"310\",\"mobile_network_code\":\"456\",\"error_code\":0}}");
+        var d2 = await c2.Lookups.CarrierAsync("2015550123");
+        Assert.Equal("310", d2.Carrier!.MobileCountryCode);
+        Assert.Equal("456", d2.Carrier.MobileNetworkCode);
+        Assert.Equal(0, d2.Carrier.ErrorCode);
     }
 
     // --------------------------------------------------------------- Messaging ---
@@ -319,6 +591,53 @@ public class ResourceTests
         h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/messaging", "{\"numbers\":[]}");
         await c.Messaging.NumbersStateAsync(new[] { "2015550123" });
         Assert.Contains("numbers=2015550123", h.Captured[0].Request.RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task Messaging_Send_MediaOnlyMms_OmitsText()
+    {
+        // v2.2.18+: text is optional — a media-only MMS sends no text on the wire.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Post, "/v2.2/messages",
+            "{\"id\":\"i\",\"type\":\"mms\",\"fromNumber\":\"2015550100\",\"toNumber\":\"2015550123\",\"parts\":1," +
+            "\"mediaUrls\":[\"https://cdn.example.com/x.png\"]}");
+        var s = await c.Messaging.SendAsync(new MessageSendRequest
+        {
+            FromNumber = "2015550100",
+            ToNumber = "2015550123",
+            MediaUrls = new List<string> { "https://cdn.example.com/x.png" },
+        });
+        Assert.Equal("mms", s.Type);
+        var body = h.Captured[0].Body;
+        Assert.Contains("\"fromNumber\":\"2015550100\"", body);
+        Assert.Contains("\"mediaUrls\":[", body);
+        Assert.DoesNotContain("\"text\"", body);     // media-only MMS omits text
+        Assert.DoesNotContain("\"subject\"", body);  // unset deprecated subject is omitted
+    }
+
+    [Fact]
+    public async Task Messaging_History_DecodesNewRecordFields()
+    {
+        // v2.2.18+ record fields: dlr receipt detail, mms attachments/subject, outbound ip.
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/messages",
+            "{\"number\":\"2015550100\",\"type\":\"dlr\",\"fromTs\":1,\"toTs\":2,\"messages\":[" +
+            "{\"id\":\"a\",\"key\":[\"x\"],\"value\":{\"sourceNumber\":\"12015550100\",\"destinationNumber\":\"12015550123\"," +
+            "\"messageText\":\"stat:DELIVRD err:000\",\"transactionGUID\":\"1793144711856jfw\",\"concatenatedMessage\":\"002\"}}," +
+            "{\"id\":\"b\",\"key\":[\"y\"],\"value\":{\"direction\":\"in\",\"number\":\"2015550123\",\"subject\":\"hi\"," +
+            "\"attachments\":[{\"contentFile\":\"https://example.com/f.png\",\"contentType\":\"image/png\"}]}}," +
+            "{\"id\":\"c\",\"key\":[\"z\"],\"value\":{\"direction\":\"out\",\"number\":\"2015550123\",\"message\":\"ok\",\"ip\":\"203.0.113.10\"}}]}");
+        var r = await c.Messaging.HistoryAsync(new HistoryOptions { Number = "2015550100", Type = "dlr" });
+        var dlr = r.Messages[0].Value;
+        Assert.Equal("stat:DELIVRD err:000", dlr.MessageText);
+        Assert.Equal("1793144711856jfw", dlr.TransactionGuid);
+        Assert.Equal("002", dlr.ConcatenatedMessage);
+        var mms = r.Messages[1].Value;
+        Assert.Equal("hi", mms.Subject);
+        var att = (JsonElement)mms.Attachments!;
+        Assert.Equal("https://example.com/f.png", att[0].GetProperty("contentFile").GetString());
+        var sms = r.Messages[2].Value;
+        Assert.Equal("203.0.113.10", sms.Ip);
     }
 
     [Fact]
@@ -412,6 +731,121 @@ public class ResourceTests
         await c.Numbers.GetSmsAsync("n");
         await c.Numbers.SetSmsAsync("n", new NumberSmsRequest { Type = "email", Resource = "e" });
         await c.Numbers.RemoveSmsAsync("n");
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Get()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"listed\",\"eligible\":true," +
+            "\"listing\":{\"type\":\"B\",\"name\":\"Acme Corp\",\"streetNumber\":\"100\",\"streetName\":\"Broadway\"," +
+            "\"streetType\":\"St\",\"streetSuffix\":\"\",\"location\":\"Suite 900\",\"city\":\"New York\"," +
+            "\"state\":\"NY\",\"zip\":\"10005\",\"complex\":false},\"pending\":null}");
+        var d = await c.Numbers.GetDirectoryListingAsync("2015550123");
+        Assert.Equal("listed", d.Status);
+        Assert.True(d.Eligible);
+        Assert.Equal("B", d.Listing!.Type);
+        Assert.Equal("Acme Corp", d.Listing.Name);
+        Assert.False(d.Listing.Complex!.Value);
+        Assert.Null(d.Pending);
+        Assert.Equal("/v2.2/numbers/2015550123/directory-listing", h.Captured[0].Request.RequestUri!.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Get_PendingAdd()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Get, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"pending\",\"eligible\":true,\"listing\":null," +
+            "\"pending\":{\"type\":\"R\",\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"city\":\"New York\",\"state\":\"NY\",\"zip\":\"10005\"}}");
+        var d = await c.Numbers.GetDirectoryListingAsync("2015550123");
+        Assert.Equal("pending", d.Status);
+        Assert.Null(d.Listing);
+        Assert.Equal("R", d.Pending!.Type);
+        Assert.Equal("Jane", d.Pending.FirstName);
+        Assert.Equal("Doe", d.Pending.LastName);
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Put_Business_Accepts202()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"pending\",\"orderId\":\"1026472\"," +
+            "\"listing\":{\"type\":\"business\",\"name\":\"Acme Corp\",\"city\":\"New York\",\"state\":\"NY\",\"zip\":\"10005\"}}",
+            HttpStatusCode.Accepted);
+        var d = await c.Numbers.SetDirectoryListingAsync("2015550123", new DirectoryListingRequest
+        {
+            Type = "business",
+            Name = "Acme Corp",
+            StreetNumber = "100",
+            StreetName = "Broadway",
+            StreetType = "St",
+            StreetSuffix = "NE",
+            Location = "Suite 900",
+            City = "New York",
+            State = "NY",
+            Zip = "10005",
+        });
+        Assert.Equal("pending", d.Status);
+        Assert.Equal("1026472", d.OrderId);
+        Assert.Equal("Acme Corp", d.Listing!.Name);
+        var body = h.Captured[0].Body;
+        Assert.Contains("\"type\":\"business\"", body);
+        Assert.Contains("\"name\":\"Acme Corp\"", body);
+        Assert.Contains("\"streetNumber\":\"100\"", body);
+        Assert.Contains("\"city\":\"New York\"", body);
+        Assert.Contains("\"state\":\"NY\"", body);
+        Assert.Contains("\"zip\":\"10005\"", body);
+        Assert.DoesNotContain("firstName", body);
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Put_Residence()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Put, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"pending\",\"orderId\":\"1026473\"," +
+            "\"listing\":{\"type\":\"residence\",\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"city\":\"New York\",\"state\":\"NY\",\"zip\":\"10005\"}}",
+            HttpStatusCode.Accepted);
+        var d = await c.Numbers.SetDirectoryListingAsync("2015550123", new DirectoryListingRequest
+        {
+            Type = "residence",
+            FirstName = "Jane",
+            LastName = "Doe",
+            City = "New York",
+            State = "NY",
+            Zip = "10005",
+        });
+        Assert.Equal("pending", d.Status);
+        var body = h.Captured[0].Body;
+        Assert.Contains("\"type\":\"residence\"", body);
+        Assert.Contains("\"firstName\":\"Jane\"", body);
+        Assert.Contains("\"lastName\":\"Doe\"", body);
+        Assert.DoesNotContain("\"name\"", body);
+    }
+
+    [Fact]
+    public async Task Numbers_DirectoryListing_Delete_Accepts202()
+    {
+        var (c, h) = TestFactory.NewClient();
+        h.EnqueueEnvelope(HttpMethod.Delete, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"removing\",\"orderId\":\"1026473\"}",
+            HttpStatusCode.Accepted);
+        h.EnqueueEnvelope(HttpMethod.Delete, "/v2.2/numbers/2015550123/directory-listing",
+            "{\"number\":\"2015550123\",\"status\":\"not_listed\"}",
+            HttpStatusCode.Accepted);
+
+        var d = await c.Numbers.RemoveDirectoryListingAsync("2015550123");
+        Assert.Equal("removing", d.Status);
+        Assert.Equal("1026473", d.OrderId);
+        Assert.Equal(string.Empty, h.Captured[0].Body); // delete takes no body
+
+        // cancelling a pending add reports not_listed with no orderId
+        var cancel = await c.Numbers.RemoveDirectoryListingAsync("2015550123");
+        Assert.Equal("not_listed", cancel.Status);
+        Assert.Null(cancel.OrderId);
     }
 
     [Fact]

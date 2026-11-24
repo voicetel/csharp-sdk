@@ -44,6 +44,7 @@ public sealed class VoiceTelClient : IDisposable
         Acl = new AclService(_transport);
         Authentication = new AuthenticationService(_transport);
         E911 = new E911Service(_transport);
+        Fax = new FaxService(_transport);
         Gateways = new GatewaysService(_transport);
         INumbering = new INumberingService(_transport);
         Lookups = new LookupsService(_transport);
@@ -64,13 +65,16 @@ public sealed class VoiceTelClient : IDisposable
     /// <summary>e911 record provisioning, address validation, lookup, removal.</summary>
     public E911Service E911 { get; }
 
+    /// <summary>Sending faxes (multipart, idempotent per Idempotency-Key), history, and PDF download.</summary>
+    public FaxService Fax { get; }
+
     /// <summary>Termination gateway management.</summary>
     public GatewaysService Gateways { get; }
 
     /// <summary>Inventory search, coverage queries, number orders, and port-ins.</summary>
     public INumberingService INumbering { get; }
 
-    /// <summary>CNAM and LRN dips.</summary>
+    /// <summary>CNAM, carrier &amp; line type, and LRN dips.</summary>
     public LookupsService Lookups { get; }
 
     /// <summary>SMS/MMS sending and 10DLC brand/campaign registration.</summary>
