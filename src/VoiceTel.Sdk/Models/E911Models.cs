@@ -29,7 +29,9 @@ public sealed class E911CreateRequest
 public sealed class E911ProvisionByIdRequest
 {
     [JsonPropertyName("callername")] public string Callername { get; set; } = string.Empty;
-    [JsonPropertyName("addressid")] public int AddressId { get; set; }
+
+    /// <summary>Hex-string address id from <c>POST /v2.2/e911/validations</c> (opaque, not a number).</summary>
+    [JsonPropertyName("addressid")] public string AddressId { get; set; } = string.Empty;
 }
 
 /// <summary>An e911 record bound to a TN.</summary>
@@ -47,7 +49,8 @@ public sealed class E911Entry
 /// <summary>Result from <c>POST /v2.2/e911/validations</c>.</summary>
 public sealed class E911ValidatedAddress
 {
-    [JsonPropertyName("addressid")] public int AddressId { get; set; }
+    /// <summary>Upstream address id — a hex string (for example <c>123a45b678c9d012e3f45a67b890c123</c>), not a number.</summary>
+    [JsonPropertyName("addressid")] public string AddressId { get; set; } = string.Empty;
     [JsonPropertyName("address1")] public string Address1 { get; set; } = string.Empty;
     [JsonPropertyName("address2")] public string? Address2 { get; set; }
     [JsonPropertyName("city")] public string City { get; set; } = string.Empty;

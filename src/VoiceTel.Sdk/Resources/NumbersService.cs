@@ -56,6 +56,27 @@ public sealed class NumbersService
     public Task<NumberLidbData> SetLidbAsync(string number, NumberLidbRequest body, CancellationToken cancellationToken = default) =>
         _t.RequestAsync<NumberLidbData>(HttpMethod.Put, NumberPath(number) + "/lidb", null, body, requireAuth: true, cancellationToken);
 
+    /// <summary>Returns the 411 directory-listing state of a TN as published.</summary>
+    public Task<DirectoryListingData> GetDirectoryListingAsync(string number, CancellationToken cancellationToken = default) =>
+        _t.RequestAsync<DirectoryListingData>(HttpMethod.Get, NumberPath(number) + "/directory-listing", null, null, requireAuth: true, cancellationToken);
+
+    /// <summary>
+    /// Adds or replaces the 411 directory listing of a TN. Accepted at once
+    /// (HTTP 202) and applied in the background — the returned
+    /// <see cref="DirectoryListingData.Status"/> is <c>pending</c>.
+    /// </summary>
+    public Task<DirectoryListingData> SetDirectoryListingAsync(string number, DirectoryListingRequest body, CancellationToken cancellationToken = default) =>
+        _t.RequestAsync<DirectoryListingData>(HttpMethod.Put, NumberPath(number) + "/directory-listing", null, body, requireAuth: true, cancellationToken);
+
+    /// <summary>
+    /// Removes the 411 directory listing of a TN, or cancels an add that has not
+    /// been applied yet. Accepted at once (HTTP 202) and applied in the background —
+    /// the returned <see cref="DirectoryListingData.Status"/> is <c>removing</c>
+    /// (or <c>not_listed</c> for a cancelled add).
+    /// </summary>
+    public Task<DirectoryListingData> RemoveDirectoryListingAsync(string number, CancellationToken cancellationToken = default) =>
+        _t.RequestAsync<DirectoryListingData>(HttpMethod.Delete, NumberPath(number) + "/directory-listing", null, null, requireAuth: true, cancellationToken);
+
     /// <summary>Reads fax-to-email routing.</summary>
     public Task<NumberFaxData> GetFaxAsync(string number, CancellationToken cancellationToken = default) =>
         _t.RequestAsync<NumberFaxData>(HttpMethod.Get, NumberPath(number) + "/fax", null, null, requireAuth: true, cancellationToken);

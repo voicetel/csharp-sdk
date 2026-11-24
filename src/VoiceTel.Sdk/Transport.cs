@@ -88,7 +88,108 @@ internal sealed class Transport
         bool requireAuth,
         CancellationToken cancellationToken)
     {
-        var (raw, statusCode) = await SendAsync(method, path, query, body, requireAuth, cancellationToken).ConfigureAwait(false);
+        byte[]? bodyBytes = null;
+        if (body is not null)
+        {
+            try
+            {
+                bodyBytes = JsonSerializer.SerializeToUtf8Bytes(body, body.GetType(), JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                throw new ApiError(ErrorKind.Unknown, 0, "marshal request body", innerException: ex);
+            }
+        }
+
+        var (raw, statusCode) = await SendAsync(
+            method, path, query, bodyBytes, contentType: null, idempotencyKey: null, requireAuth, cancellationToken)
+            .ConfigureAwait(false);
+        return DecodeEnvelope<T>(raw, statusCode);
+    }
+
+    /// <summary>
+    /// Issue an HTTP request whose body is already encoded — for example a
+    /// multipart form — and decode the JSON response.
+    /// </summary>
+    /// <typeparam name="T">Response data type after envelope unwrapping.</typeparam>
+    /// <param name="method">HTTP method.</param>
+    /// <param name="path">Request path beginning with <c>/v2.2/</c>.</param>
+    /// <param name="query">URL-encoded query string or null.</param>
+    /// <param name="contentType">Full Content-Type header value, boundary included for multipart bodies.</param>
+    /// <param name="body">Raw request body bytes.</param>
+    /// <param name="idempotencyKey">When set, replaces the auto-generated
+    /// Idempotency-Key and stays stable across transport retries.</param>
+    /// <param name="requireAuth">When true, sends the bearer token (or throws if not set).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<T> RequestWithRawBodyAsync<T>(
+        HttpMethod method,
+        string path,
+        string? query,
+        string contentType,
+        byte[] body,
+        string? idempotencyKey,
+        bool requireAuth,
+        CancellationToken cancellationToken)
+    {
+        var (raw, statusCode) = await SendAsync(
+            method, path, query, body, contentType, idempotencyKey, requireAuth, cancellationToken)
+            .ConfigureAwait(false);
+        return DecodeEnvelope<T>(raw, statusCode);
+    }
+
+    /// <summary>
+    /// Issue an HTTP request and return the raw response bytes — for binary
+    /// endpoints such as the fax document download. The body is returned
+    /// as-is (no envelope unwrapping); errors still throw
+    /// <see cref="ApiError"/> with the parsed error envelope.
+    /// </summary>
+    public async Task<byte[]> RequestBytesAsync(
+        HttpMethod method,
+        string path,
+        string? query,
+        bool requireAuth,
+        CancellationToken cancellationToken)
+    {
+        var (raw, _) = await SendAsync(
+            method, path, query, bodyBytes: null, contentType: null, idempotencyKey: null, requireAuth, cancellationToken)
+            .ConfigureAwait(false);
+        return raw;
+    }
+
+    /// <summary>
+    /// Issue an HTTP request and discard the response body. Used for DELETE
+    /// endpoints that return 204 No Content.
+    /// </summary>
+    public async Task RequestAsync(
+        HttpMethod method,
+        string path,
+        string? query,
+        object? body,
+        bool requireAuth,
+        CancellationToken cancellationToken)
+    {
+        await SendAsync(method, path, query, SerializeJsonBody(body), contentType: null, idempotencyKey: null,
+            requireAuth, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static byte[]? SerializeJsonBody(object? body)
+    {
+        if (body is null)
+        {
+            return null;
+        }
+        try
+        {
+            return JsonSerializer.SerializeToUtf8Bytes(body, body.GetType(), JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            throw new ApiError(ErrorKind.Unknown, 0, "marshal request body", innerException: ex);
+        }
+    }
+
+    private static T DecodeEnvelope<T>(byte[] raw, int statusCode)
+    {
         if (raw.Length == 0)
         {
             return default!;
@@ -112,26 +213,13 @@ internal sealed class Transport
         }
     }
 
-    /// <summary>
-    /// Issue an HTTP request and discard the response body. Used for DELETE
-    /// endpoints that return 204 No Content.
-    /// </summary>
-    public async Task RequestAsync(
-        HttpMethod method,
-        string path,
-        string? query,
-        object? body,
-        bool requireAuth,
-        CancellationToken cancellationToken)
-    {
-        await SendAsync(method, path, query, body, requireAuth, cancellationToken).ConfigureAwait(false);
-    }
-
     private async Task<(byte[] Body, int StatusCode)> SendAsync(
         HttpMethod method,
         string path,
         string? query,
-        object? body,
+        byte[]? bodyBytes,
+        string? contentType,
+        string? idempotencyKey,
         bool requireAuth,
         CancellationToken cancellationToken)
     {
@@ -149,20 +237,7 @@ internal sealed class Transport
             target += "?" + query;
         }
 
-        byte[]? bodyBytes = null;
-        if (body is not null)
-        {
-            try
-            {
-                bodyBytes = JsonSerializer.SerializeToUtf8Bytes(body, body.GetType(), JsonOptions);
-            }
-            catch (Exception ex)
-            {
-                throw new ApiError(ErrorKind.Unknown, 0, "marshal request body", innerException: ex);
-            }
-        }
-
-        string? idempotencyKey = (method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Patch)
+        idempotencyKey ??= (method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Patch)
             ? Guid.NewGuid().ToString()
             : null;
 
@@ -184,7 +259,15 @@ internal sealed class Transport
             if (bodyBytes is not null)
             {
                 request.Content = new ByteArrayContent(bodyBytes);
-                request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                if (contentType is not null && !contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Pre-composed value (e.g. "multipart/form-data; boundary=...") — set verbatim.
+                    request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+                }
+                else
+                {
+                    request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                }
             }
 
             HttpResponseMessage response;
